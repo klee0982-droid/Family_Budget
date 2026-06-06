@@ -17,7 +17,6 @@ function Upload() {
     const reader = new FileReader()
     reader.onload = (evt) => {
       const wb = XLSX.read(evt.target.result, { type: 'binary' })
-      
       let allTransactions = []
       wb.SheetNames.forEach(sheetName => {
         const sheet = wb.Sheets[sheetName]
@@ -55,24 +54,25 @@ function Upload() {
       .filter(t => t.amount > 0)
   }
 
-function parseSamsung(rows) {
-  const header = rows[0]
-  const dateIdx = header.indexOf('승인일자')
-  const merchantIdx = header.indexOf('가맹점명')
-  const amountIdx = header.indexOf('승인금액(원)')
-  const cancelIdx = header.indexOf('취소여부')
+  function parseSamsung(rows) {
+    const header = rows[0]
+    const dateIdx = header.indexOf('승인일자')
+    const merchantIdx = header.indexOf('가맹점명')
+    const amountIdx = header.indexOf('승인금액(원)')
+    const cancelIdx = header.indexOf('취소여부')
 
-  return rows.slice(1)
-    .filter(row => row && row[merchantIdx])
-    .filter(row => row[cancelIdx] !== 'Y')
-    .map(row => ({
-      date: row[dateIdx]?.toString().replace(/\./g, '-'),
-      merchant: row[merchantIdx],
-      amount: parseInt(row[amountIdx] || 0),
-      card_type: '삼성',
-    }))
-    .filter(t => t.amount > 0)
-}
+    return rows.slice(1)
+      .filter(row => row && row[merchantIdx])
+      .filter(row => row[cancelIdx] !== 'Y')
+      .map(row => ({
+        date: row[dateIdx]?.toString().replace(/\./g, '-'),
+        merchant: row[merchantIdx],
+        amount: parseInt(row[amountIdx] || 0),
+        card_type: '삼성',
+      }))
+      .filter(t => t.amount > 0)
+  }
+
   async function handleSave() {
     if (transactions.length === 0) return
     setSaving(true)
@@ -90,7 +90,6 @@ function parseSamsung(rows) {
     })
 
     const { error } = await supabase.from('transactions').insert(rows)
-
     if (error) {
       alert('저장 실패: ' + error.message)
     } else {
@@ -102,46 +101,85 @@ function parseSamsung(rows) {
   }
 
   return (
-    <div style={{maxWidth: '800px'}}>
-      <h2>카드내역 업로드</h2>
-      
-      <div style={{border: '2px dashed #ccc', borderRadius: '8px', padding: '32px', textAlign: 'center', marginBottom: '24px'}}>
-        <input type="file" accept=".xlsx,.xls" onChange={handleFile} />
-        {fileName && <p style={{marginTop: '8px', color: '#666'}}>{fileName}</p>}
+    <div>
+      <h2 style={{marginBottom: '24px'}}>카드내역 업로드</h2>
+
+      <div className="card" style={{marginBottom: '16px'}}>
+        <div style={{
+          border: '2px dashed #e8ebed',
+          borderRadius: '12px',
+          padding: '40px',
+          textAlign: 'center',
+          background: '#f9fafb',
+          cursor: 'pointer',
+        }}>
+          <div style={{fontSize: '32px', marginBottom: '12px'}}>📂</div>
+          <p style={{color: '#8b95a1', fontSize: '14px', marginBottom: '16px'}}>
+            신한, 삼성 카드 엑셀 파일을 업로드해주세요
+          </p>
+          <label style={{
+            display: 'inline-block',
+            padding: '10px 20px',
+            background: '#3182f6',
+            color: 'white',
+            borderRadius: '10px',
+            fontSize: '14px',
+            fontWeight: '600',
+            cursor: 'pointer',
+          }}>
+            파일 선택
+            <input type="file" accept=".xlsx,.xls" onChange={handleFile} style={{display: 'none'}} />
+          </label>
+          {fileName && (
+            <p style={{marginTop: '12px', fontSize: '13px', color: '#3182f6', fontWeight: '500'}}>{fileName}</p>
+          )}
+        </div>
       </div>
 
       {saved && (
-        <p style={{color: 'green', marginBottom: '16px'}}>저장 완료!</p>
+        <div style={{
+          background: '#e5faf6',
+          border: '1px solid #00b493',
+          borderRadius: '10px',
+          padding: '12px 16px',
+          marginBottom: '16px',
+          color: '#00b493',
+          fontSize: '14px',
+          fontWeight: '500',
+        }}>
+          ✓ 저장 완료!
+        </div>
       )}
 
       {transactions.length > 0 && (
-        <div>
-          <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px'}}>
-            <p>{transactions.length}건 파싱됨</p>
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              style={{padding: '8px 20px', backgroundColor: '#4f46e5', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer'}}
-            >
+        <div className="card">
+          <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px'}}>
+            <div>
+              <span style={{fontWeight: '600', fontSize: '15px'}}>{transactions.length}건</span>
+              <span style={{color: '#8b95a1', fontSize: '14px', marginLeft: '6px'}}>파싱됨</span>
+            </div>
+            <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
               {saving ? '저장 중...' : 'Supabase에 저장'}
             </button>
           </div>
-          <table style={{width: '100%', borderCollapse: 'collapse', fontSize: '14px'}}>
+          <table>
             <thead>
-              <tr style={{borderBottom: '2px solid #eee'}}>
-                <th style={{padding: '8px', textAlign: 'left'}}>날짜</th>
-                <th style={{padding: '8px', textAlign: 'left'}}>가맹점</th>
-                <th style={{padding: '8px', textAlign: 'right'}}>금액</th>
-                <th style={{padding: '8px', textAlign: 'center'}}>카드</th>
+              <tr>
+                <th>날짜</th>
+                <th>가맹점</th>
+                <th style={{textAlign: 'right'}}>금액</th>
+                <th style={{textAlign: 'center'}}>카드</th>
               </tr>
             </thead>
             <tbody>
               {transactions.map((t, i) => (
-                <tr key={i} style={{borderBottom: '1px solid #f0f0f0'}}>
-                  <td style={{padding: '8px'}}>{t.date}</td>
-                  <td style={{padding: '8px'}}>{t.merchant}</td>
-                  <td style={{padding: '8px', textAlign: 'right'}}>{t.amount.toLocaleString()}원</td>
-                  <td style={{padding: '8px', textAlign: 'center'}}>{t.card_type}</td>
+                <tr key={i}>
+                  <td style={{color: '#8b95a1'}}>{t.date}</td>
+                  <td style={{fontWeight: '500'}}>{t.merchant}</td>
+                  <td style={{textAlign: 'right', fontWeight: '600'}}>{t.amount.toLocaleString()}원</td>
+                  <td style={{textAlign: 'center'}}>
+                    <span className="badge badge-primary">{t.card_type}</span>
+                  </td>
                 </tr>
               ))}
             </tbody>

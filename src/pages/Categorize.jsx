@@ -7,9 +7,7 @@ function Categorize() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
-  useEffect(() => {
-    fetchData()
-  }, [])
+  useEffect(() => { fetchData() }, [])
 
   async function fetchData() {
     setLoading(true)
@@ -37,87 +35,96 @@ function Categorize() {
   async function handleSave() {
     setSaving(true)
     const toUpdate = transactions.filter(t => t.selectedCategory)
-
     for (const t of toUpdate) {
-      await supabase
-        .from('transactions')
-        .update({ category_id: t.selectedCategory })
-        .eq('id', t.id)
+      await supabase.from('transactions').update({ category_id: t.selectedCategory }).eq('id', t.id)
     }
-
     await fetchData()
     setSaving(false)
   }
 
-  if (loading) return <div>불러오는 중...</div>
+  const categorizedCount = transactions.filter(t => t.selectedCategory).length
+
+  if (loading) return (
+    <div style={{color: '#8b95a1', padding: '40px 0', textAlign: 'center'}}>불러오는 중...</div>
+  )
 
   return (
-    <div style={{maxWidth: '900px'}}>
+    <div>
       <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px'}}>
-        <h2 style={{margin: 0}}>카테고리 분류</h2>
+        <div>
+          <h2 style={{marginBottom: '4px'}}>카테고리 분류</h2>
+          <p style={{fontSize: '14px', color: '#8b95a1'}}>
+            {transactions.length}건 중 {categorizedCount}건 분류됨
+          </p>
+        </div>
         <button
+          className="btn btn-primary"
           onClick={handleSave}
-          disabled={saving}
-          style={{padding: '8px 20px', backgroundColor: '#4f46e5', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer'}}
+          disabled={saving || categorizedCount === 0}
         >
-          {saving ? '저장 중...' : '저장'}
+          {saving ? '저장 중...' : `${categorizedCount}건 저장`}
         </button>
       </div>
 
       {transactions.length === 0 ? (
-        <p style={{color: '#666'}}>분류할 거래가 없어요. 카드내역을 먼저 업로드해주세요!</p>
+        <div className="card" style={{textAlign: 'center', padding: '60px'}}>
+          <div style={{fontSize: '40px', marginBottom: '12px'}}>✅</div>
+          <p style={{color: '#8b95a1', fontSize: '14px'}}>분류할 거래가 없어요. 카드내역을 먼저 업로드해주세요!</p>
+        </div>
       ) : (
-        <table style={{width: '100%', borderCollapse: 'collapse', fontSize: '14px'}}>
-          <thead>
-            <tr style={{borderBottom: '2px solid #eee'}}>
-              <th style={{padding: '8px', textAlign: 'left'}}>날짜</th>
-              <th style={{padding: '8px', textAlign: 'left'}}>가맹점</th>
-              <th style={{padding: '8px', textAlign: 'right'}}>금액</th>
-              <th style={{padding: '8px', textAlign: 'left'}}>대분류</th>
-              <th style={{padding: '8px', textAlign: 'left'}}>소분류</th>
-            </tr>
-          </thead>
-          <tbody>
-            {transactions.map(t => {
-              const selectedMain = categories.find(c => c.id === t.selectedCategory)?.main_category || ''
-              return (
-                <tr key={t.id} style={{borderBottom: '1px solid #f0f0f0'}}>
-                  <td style={{padding: '8px'}}>{t.date}</td>
-                  <td style={{padding: '8px'}}>{t.merchant}</td>
-                  <td style={{padding: '8px', textAlign: 'right'}}>{t.amount.toLocaleString()}원</td>
-                  <td style={{padding: '8px'}}>
-                    <select
-                      value={selectedMain}
-                      onChange={e => {
-                        const firstSub = getSubCategories(e.target.value)[0]
-                        handleCategoryChange(t.id, firstSub?.id || '')
-                      }}
-                      style={{padding: '4px', borderRadius: '4px', border: '1px solid #ddd', width: '100%'}}
-                    >
-                      <option value="">선택</option>
-                      {mainCategories.map(m => (
-                        <option key={m} value={m}>{m}</option>
-                      ))}
-                    </select>
-                  </td>
-                  <td style={{padding: '8px'}}>
-                    <select
-                      value={t.selectedCategory}
-                      onChange={e => handleCategoryChange(t.id, e.target.value)}
-                      style={{padding: '4px', borderRadius: '4px', border: '1px solid #ddd', width: '100%'}}
-                      disabled={!selectedMain}
-                    >
-                      <option value="">선택</option>
-                      {getSubCategories(selectedMain).map(c => (
-                        <option key={c.id} value={c.id}>{c.sub_category}</option>
-                      ))}
-                    </select>
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+        <div className="card">
+          <table>
+            <thead>
+              <tr>
+                <th>날짜</th>
+                <th>가맹점</th>
+                <th style={{textAlign: 'right'}}>금액</th>
+                <th>대분류</th>
+                <th>소분류</th>
+              </tr>
+            </thead>
+            <tbody>
+              {transactions.map(t => {
+                const selectedMain = categories.find(c => c.id === t.selectedCategory)?.main_category || ''
+                return (
+                  <tr key={t.id}>
+                    <td style={{color: '#8b95a1', fontSize: '13px'}}>{t.date}</td>
+                    <td style={{fontWeight: '500'}}>{t.merchant}</td>
+                    <td style={{textAlign: 'right', fontWeight: '600'}}>{t.amount.toLocaleString()}원</td>
+                    <td>
+                      <select
+                        value={selectedMain}
+                        onChange={e => {
+                          const firstSub = getSubCategories(e.target.value)[0]
+                          handleCategoryChange(t.id, firstSub?.id || '')
+                        }}
+                        style={{width: '100%', fontSize: '13px'}}
+                      >
+                        <option value="">선택</option>
+                        {mainCategories.map(m => (
+                          <option key={m} value={m}>{m}</option>
+                        ))}
+                      </select>
+                    </td>
+                    <td>
+                      <select
+                        value={t.selectedCategory}
+                        onChange={e => handleCategoryChange(t.id, e.target.value)}
+                        disabled={!selectedMain}
+                        style={{width: '100%', fontSize: '13px'}}
+                      >
+                        <option value="">선택</option>
+                        {getSubCategories(selectedMain).map(c => (
+                          <option key={c.id} value={c.id}>{c.sub_category}</option>
+                        ))}
+                      </select>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   )
