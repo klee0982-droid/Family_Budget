@@ -4,6 +4,7 @@ import Upload from './pages/Upload'
 import Categorize from './pages/Categorize'
 import MonthlyReport from './pages/MonthlyReport'
 import Assets from './pages/Assets'
+import Income from './pages/Income'
 
 function App() {
   return (
@@ -13,6 +14,7 @@ function App() {
           <NavLink to="/">대시보드</NavLink>
           <NavLink to="/upload">카드내역 업로드</NavLink>
           <NavLink to="/categorize">카테고리 분류</NavLink>
+          <NavLink to="/income">수입/저축</NavLink>
           <NavLink to="/monthly">월별 리포트</NavLink>
           <NavLink to="/assets">자산 현황</NavLink>
         </nav>
@@ -21,6 +23,7 @@ function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/upload" element={<Upload />} />
             <Route path="/categorize" element={<Categorize />} />
+            <Route path="/income" element={<Income />} />
             <Route path="/monthly" element={<MonthlyReport />} />
             <Route path="/assets" element={<Assets />} />
           </Routes>
