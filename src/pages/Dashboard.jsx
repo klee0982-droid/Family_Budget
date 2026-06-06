@@ -2,9 +2,12 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 
+const defaultMonth = new Date().getMonth() === 0 ? 12 : new Date().getMonth()
+const defaultYear = new Date().getMonth() === 0 ? new Date().getFullYear() - 1 : new Date().getFullYear()
+
 function Dashboard() {
-  const [year] = useState(new Date().getFullYear())
-  const [latestMonth, setLatestMonth] = useState(null)
+  const [year] = useState(defaultYear)
+  const [selectedMonth, setSelectedMonth] = useState(defaultMonth)
   const [summary, setSummary] = useState({ income: 0, expense: 0, saving: 0 })
   const [topExpenses, setTopExpenses] = useState([])
   const [trendData, setTrendData] = useState([])
@@ -13,9 +16,9 @@ function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [aiComment, setAiComment] = useState('')
   const [aiLoading, setAiLoading] = useState(false)
-  const [yearlyStats, setYearlyStats] = useState([])
+  const [yearlyStats, setYearlyStats] = useState({})
 
-  useEffect(() => { fetchData() }, [])
+  useEffect(() => { fetchData() }, [selectedMonth])
 
   async function fetchData() {
     setLoading(true)
@@ -27,26 +30,18 @@ function Dashboard() {
       supabase.from('assets').select('*').eq('year', year).order('month', { ascending: false }).limit(50),
     ])
 
-    // 데이터가 있는 가장 최근 월 찾기
-    const incMonths = [...new Set((allInc || []).map(r => r.month))]
-    const txMonths = [...new Set((allTx || []).map(r => r.month))]
-    const savMonths = [...new Set((allSav || []).map(r => r.month))]
-    const allMonths = [...new Set([...incMonths, ...txMonths, ...savMonths])].sort((a, b) => b - a)
-    const latest = allMonths[0] || new Date().getMonth() + 1
-    setLatestMonth(latest)
-
-    // 최근 월 요약
-    const totalIncome = (allInc || []).filter(r => r.month === latest).reduce((s, r) => s + r.amount, 0)
-    const totalExpense = (allTx || []).filter(r => r.month === latest).reduce((s, r) => s + r.amount, 0)
-    const totalSaving = (allSav || []).filter(r => r.month === latest).reduce((s, r) => s + r.amount, 0)
+    // 선택된 월 요약
+    const totalIncome = (allInc || []).filter(r => r.month === selectedMonth).reduce((s, r) => s + r.amount, 0)
+    const totalExpense = (allTx || []).filter(r => r.month === selectedMonth).reduce((s, r) => s + r.amount, 0)
+    const totalSaving = (allSav || []).filter(r => r.month === selectedMonth).reduce((s, r) => s + r.amount, 0)
     setSummary({ income: totalIncome, expense: totalExpense, saving: totalSaving })
 
     // 미분류
-    setUncategorized((allTx || []).filter(t => t.month === latest && !t.category_id).length)
+    setUncategorized((allTx || []).filter(t => t.month === selectedMonth && !t.category_id).length)
 
     // 카테고리별 지출 top3
     const catMap = {}
-    ;(allTx || []).filter(t => t.month === latest && t.category_id).forEach(t => {
+    ;(allTx || []).filter(t => t.month === selectedMonth && t.category_id).forEach(t => {
       const name = t.categories?.main_category || '기타'
       catMap[name] = (catMap[name] || 0) + t.amount
     })
@@ -59,12 +54,18 @@ function Dashboard() {
     setNetAsset(latestAssets.reduce((s, a) => s + a.amount, 0))
 
     // 연간 트렌드
-    const trend = Array.from({ length: latest }, (_, i) => {
+    const trend = Array.from({ length: selectedMonth }, (_, i) => {
       const m = i + 1
       const inc = (allInc || []).filter(r => r.month === m).reduce((s, r) => s + r.amount, 0)
       const exp = (allTx || []).filter(r => r.month === m).reduce((s, r) => s + r.amount, 0)
       const sav = (allSav || []).filter(r => r.month === m).reduce((s, r) => s + r.amount, 0)
-      return { month: `${m}월`, 수입: Math.round(inc / 10000), 지출: Math.round(exp / 10000), 저축: Math.round(sav / 10000), savingRate: inc > 0 ? parseFloat(((inc - exp) / inc * 100).toFixed(1)) : 0 }
+      return {
+        month: `${m}월`,
+        수입: Math.round(inc / 10000),
+        지출: Math.round(exp / 10000),
+        저축: Math.round(sav / 10000),
+        savingRate: inc > 0 ? parseFloat(((inc - exp) / inc * 100).toFixed(1)) : 0
+      }
     })
     setTrendData(trend)
 
@@ -79,7 +80,6 @@ function Dashboard() {
   }
 
   async function generateComment() {
-    if (!latestMonth) return
     setAiLoading(true)
     const savingRate = summary.income > 0 ? ((summary.income - summary.expense) / summary.income * 100).toFixed(1) : 0
     const topStr = topExpenses.map(t => `${t.name} ${t.value.toLocaleString()}원`).join(', ')
@@ -97,14 +97,14 @@ function Dashboard() {
             role: 'user',
             content: `${year}년 재무 현황 분석 요청:
 
-[${latestMonth}월 현황 (가장 최근)]
+[${selectedMonth}월 현황]
 - 수입: ${summary.income.toLocaleString()}원
 - 지출: ${summary.expense.toLocaleString()}원
 - 저축: ${summary.saving.toLocaleString()}원
 - 저축률: ${savingRate}%
 - 지출 상위 카테고리: ${topStr || '데이터 없음'}
 
-[연간 흐름 (1월~${latestMonth}월)]
+[연간 흐름 (1월~${selectedMonth}월)]
 ${trendStr}
 
 [연간 합계]
@@ -131,9 +131,12 @@ ${trendStr}
     <div>
       <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px'}}>
         <div>
-          <h2 style={{marginBottom: '4px'}}>{year}년 {latestMonth}월 Overview</h2>
-          <p style={{fontSize: '14px', color: '#8b95a1'}}>데이터가 있는 가장 최근 월 기준이에요</p>
+          <h2 style={{marginBottom: '4px'}}>{year}년 {selectedMonth}월 Overview</h2>
+          <p style={{fontSize: '14px', color: '#8b95a1'}}>월을 선택해서 확인할 수 있어요</p>
         </div>
+        <select value={selectedMonth} onChange={e => setSelectedMonth(parseInt(e.target.value))}>
+          {Array.from({length: 12}, (_, i) => i + 1).map(m => <option key={m} value={m}>{m}월</option>)}
+        </select>
       </div>
 
       {loading ? (
@@ -148,7 +151,7 @@ ${trendStr}
                 {aiComment ? (
                   <p style={{fontSize: '14px', color: '#191f28', lineHeight: '1.7', whiteSpace: 'pre-wrap'}}>{aiComment}</p>
                 ) : (
-                  <p style={{fontSize: '14px', color: '#8b95a1'}}>{latestMonth}월 현황과 연간 흐름을 함께 분석해드려요</p>
+                  <p style={{fontSize: '14px', color: '#8b95a1'}}>{selectedMonth}월 현황과 연간 흐름을 함께 분석해드려요</p>
                 )}
               </div>
               <button
@@ -168,13 +171,13 @@ ${trendStr}
 
           {uncategorized > 0 && (
             <div style={{background: '#fff7e6', border: '1px solid #ffd591', borderRadius: '10px', padding: '12px 16px', marginBottom: '20px', fontSize: '14px', color: '#ff8c00', fontWeight: '500'}}>
-              ⚠ 미분류 거래 {uncategorized}건이 있어요. 카테고리 분류 페이지에서 분류해주세요.
+              ⚠ 미분류 거래 {uncategorized}건이 있어요. 수입/저축/지출 페이지에서 분류해주세요.
             </div>
           )}
 
-          {/* 최근 월 요약 */}
+          {/* 요약 카드 */}
           <div style={{marginBottom: '8px'}}>
-            <div className="section-title">{latestMonth}월 현황</div>
+            <div className="section-title">{selectedMonth}월 현황</div>
           </div>
           <div style={{display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '24px'}}>
             {[
@@ -193,9 +196,8 @@ ${trendStr}
           </div>
 
           <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px'}}>
-            {/* 지출 top3 */}
             <div className="card">
-              <h3 style={{marginBottom: '16px'}}>{latestMonth}월 지출 Top 3</h3>
+              <h3 style={{marginBottom: '16px'}}>{selectedMonth}월 지출 Top 3</h3>
               {topExpenses.length === 0 ? (
                 <p style={{color: '#b0b8c1', fontSize: '13px', textAlign: 'center', padding: '16px 0'}}>데이터가 없어요</p>
               ) : topExpenses.map((item, i) => (
@@ -212,7 +214,6 @@ ${trendStr}
               ))}
             </div>
 
-            {/* 순자산 + 연간 요약 */}
             <div className="card">
               <h3 style={{marginBottom: '16px'}}>연간 요약</h3>
               <div style={{marginBottom: '16px'}}>
@@ -238,7 +239,6 @@ ${trendStr}
             </div>
           </div>
 
-          {/* 연간 트렌드 */}
           {trendData.length > 1 && (
             <div className="card">
               <h3 style={{marginBottom: '20px'}}>{year}년 수입 / 지출 트렌드</h3>
