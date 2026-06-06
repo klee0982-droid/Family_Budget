@@ -12,6 +12,7 @@ function MonthlyReport() {
   const [transactions, setTransactions] = useState([])
   const [loading, setLoading] = useState(true)
   const [openSections, setOpenSections] = useState(new Set())
+  const [openMainCats, setOpenMainCats] = useState(new Set())
 
   useEffect(() => { fetchData() }, [year, month])
 
@@ -36,7 +37,14 @@ function MonthlyReport() {
     })
   }
 
-  // 대분류로 먼저 묶고, 그 안에 소분류별로 합산
+  function toggleMainCat(key) {
+    setOpenMainCats(prev => {
+      const next = new Set(prev)
+      next.has(key) ? next.delete(key) : next.add(key)
+      return next
+    })
+  }
+
   function groupByMain(list) {
     const mainMap = {}
     list.forEach(item => {
@@ -67,8 +75,9 @@ function MonthlyReport() {
     const isOpen = openSections.has(sectionKey)
     return (
       <div className="card">
+        {/* 섹션 헤더 */}
         <div
-          style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', marginBottom: isOpen ? '16px' : 0}}
+          style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', marginBottom: isOpen ? '12px' : 0}}
           onClick={() => toggleSection(sectionKey)}
         >
           <div style={{display: 'flex', alignItems: 'center', gap: '12px'}}>
@@ -78,39 +87,62 @@ function MonthlyReport() {
           <span style={{fontSize: '13px', color: '#8b95a1'}}>{isOpen ? '▲ 접기' : '▼ 펼치기'}</span>
         </div>
 
+        {/* 섹션 내용 */}
         {isOpen && (
           groups.length === 0 ? (
             <p style={{fontSize: '13px', color: '#b0b8c1', textAlign: 'center', padding: '16px 0'}}>{emptyText}</p>
           ) : (
             <div>
-              {groups.map(g => (
-                <div key={g.main} style={{marginBottom: '12px'}}>
-                  {/* 대분류 행 */}
-                  <div style={{
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    padding: '8px 10px',
-                    background: '#f9fafb',
-                    borderRadius: '8px',
-                    marginBottom: '4px',
-                  }}>
-                    <span style={{fontSize: '14px', fontWeight: '600', color: '#191f28'}}>{g.main}</span>
-                    <span style={{fontSize: '14px', fontWeight: '700', color}}>{g.total.toLocaleString()}원</span>
-                  </div>
-                  {/* 소분류 행 */}
-                  {g.subs.length > 1 || (g.subs.length === 1 && g.subs[0].sub !== g.main) ? (
-                    g.subs.map(s => (
-                      <div key={s.sub} style={{
+              {groups.map(g => {
+                const catKey = `${sectionKey}_${g.main}`
+                const isCatOpen = openMainCats.has(catKey)
+                const hasSubs = g.subs.length > 1 || (g.subs.length === 1 && g.subs[0].sub !== g.main)
+                return (
+                  <div key={g.main} style={{marginBottom: '4px'}}>
+                    {/* 대분류 행 */}
+                    <div
+                      onClick={() => hasSubs && toggleMainCat(catKey)}
+                      style={{
                         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                        padding: '5px 10px 5px 20px',
-                        borderBottom: '1px solid #f2f4f6',
-                      }}>
-                        <span style={{fontSize: '13px', color: '#8b95a1'}}>{s.sub}</span>
-                        <span style={{fontSize: '13px', fontWeight: '500', color: '#191f28'}}>{s.total.toLocaleString()}원</span>
+                        padding: '9px 12px',
+                        background: '#f9fafb',
+                        borderRadius: isCatOpen ? '8px 8px 0 0' : '8px',
+                        cursor: hasSubs ? 'pointer' : 'default',
+                        transition: 'background 0.1s',
+                      }}
+                    >
+                      <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                        <span style={{fontSize: '14px', fontWeight: '600', color: '#191f28'}}>{g.main}</span>
+                        {hasSubs && (
+                          <span style={{fontSize: '11px', color: '#b0b8c1'}}>{g.subs.length}개 항목</span>
+                        )}
                       </div>
-                    ))
-                  ) : null}
-                </div>
-              ))}
+                      <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                        <span style={{fontSize: '14px', fontWeight: '700', color}}>{g.total.toLocaleString()}원</span>
+                        {hasSubs && (
+                          <span style={{fontSize: '12px', color: '#b0b8c1'}}>{isCatOpen ? '▲' : '▼'}</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 소분류 행 */}
+                    {hasSubs && isCatOpen && (
+                      <div style={{background: 'white', border: '1px solid #f2f4f6', borderTop: 'none', borderRadius: '0 0 8px 8px', marginBottom: '4px'}}>
+                        {g.subs.map((s, idx) => (
+                          <div key={s.sub} style={{
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                            padding: '7px 12px 7px 24px',
+                            borderBottom: idx < g.subs.length - 1 ? '1px solid #f9fafb' : 'none',
+                          }}>
+                            <span style={{fontSize: '13px', color: '#8b95a1'}}>{s.sub}</span>
+                            <span style={{fontSize: '13px', fontWeight: '500', color: '#191f28'}}>{s.total.toLocaleString()}원</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           )
         )}
