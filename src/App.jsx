@@ -6,6 +6,7 @@ import MonthlyReport from './pages/MonthlyReport'
 import Assets from './pages/Assets'
 import Income from './pages/Income'
 import YearlySummary from './pages/YearlySummary'
+import CategorySettings from './pages/CategorySettings'
 import PasswordGate from './PasswordGate'
 
 function App() {
@@ -46,6 +47,7 @@ function App() {
               { to: '/monthly', label: '월별 리포트' },
               { to: '/yearly', label: '연간 결산' },
               { to: '/assets', label: '자산 현황' },
+              { to: '/category-settings', label: '카테고리 관리' },
             ].map(({ to, label }) => (
               <NavLink
                 key={to}
@@ -76,6 +78,7 @@ function App() {
               <Route path="/monthly" element={<MonthlyReport />} />
               <Route path="/yearly" element={<YearlySummary />} />
               <Route path="/assets" element={<Assets />} />
+              <Route path="/category-settings" element={<CategorySettings />} />
             </Routes>
           </main>
         </div>
