@@ -6,7 +6,7 @@ function Income() {
   const [categories, setCategories] = useState([])
   const [entries, setEntries] = useState([])
   const [year, setYear] = useState(new Date().getFullYear())
-  const [month, setMonth] = useState(new Date().getMonth() + 1)
+  const [month, setMonth] = useState(new Date().getMonth() === 0 ? 12 : new Date().getMonth())
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 

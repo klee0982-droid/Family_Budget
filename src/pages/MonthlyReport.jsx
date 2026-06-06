@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase'
 
 function MonthlyReport() {
   const [year, setYear] = useState(new Date().getFullYear())
-  const [month, setMonth] = useState(new Date().getMonth() + 1)
+  const [month, setMonth] = useState(new Date().getMonth() === 0 ? 12 : new Date().getMonth())
   const [incomes, setIncomes] = useState([])
   const [savings, setSavings] = useState([])
   const [transactions, setTransactions] = useState([])
