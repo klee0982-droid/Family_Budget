@@ -10,7 +10,6 @@ function Income() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
-  // 지출 관련
   const [manualExpenses, setManualExpenses] = useState([])
   const [cardExpenses, setCardExpenses] = useState([])
   const [newExpense, setNewExpense] = useState({ date: '', merchant: '', amount: '', category_id: '' })
@@ -28,8 +27,7 @@ function Income() {
         supabase.from('categories').select('*').eq('type', 'expense').order('sort_order'),
         supabase.from('transactions')
           .select('*, categories(main_category, sub_category)')
-          .eq('year', year)
-          .eq('month', month)
+          .eq('year', year).eq('month', month)
           .order('date', { ascending: false })
       ])
       setExpenseCategories(cats || [])
@@ -40,13 +38,8 @@ function Income() {
     }
 
     const table = tab === 'income' ? 'incomes' : 'savings'
-    const { data: cats } = await supabase
-      .from('categories').select('*')
-      .eq('type', tab === 'income' ? 'income' : 'saving')
-      .order('sort_order')
-
-    const { data: existing } = await supabase
-      .from(table).select('*').eq('year', year).eq('month', month)
+    const { data: cats } = await supabase.from('categories').select('*').eq('type', tab === 'income' ? 'income' : 'saving').order('sort_order')
+    const { data: existing } = await supabase.from(table).select('*').eq('year', year).eq('month', month)
 
     const catList = cats || []
     const existingMap = {}
@@ -81,17 +74,11 @@ function Income() {
     const table = tab === 'income' ? 'incomes' : 'savings'
     for (const e of entries) {
       const amount = parseInt(e.amount)
-      if ((!e.amount || amount === 0) && e.existing_id) {
-        await supabase.from(table).delete().eq('id', e.existing_id)
-        continue
-      }
+      if ((!e.amount || amount === 0) && e.existing_id) { await supabase.from(table).delete().eq('id', e.existing_id); continue }
       if (!e.amount || amount <= 0) continue
       const row = { year, month, category_id: e.category_id, amount, memo: e.memo }
-      if (e.existing_id) {
-        await supabase.from(table).update(row).eq('id', e.existing_id)
-      } else {
-        await supabase.from(table).insert(row)
-      }
+      if (e.existing_id) { await supabase.from(table).update(row).eq('id', e.existing_id) }
+      else { await supabase.from(table).insert(row) }
     }
     await fetchData()
     setSaving(false)
@@ -99,17 +86,12 @@ function Income() {
   }
 
   async function handleAddExpense() {
-    if (!newExpense.date || !newExpense.merchant || !newExpense.amount) {
-      alert('날짜, 내역, 금액을 모두 입력해주세요.')
-      return
-    }
+    if (!newExpense.date || !newExpense.merchant || !newExpense.amount) { alert('날짜, 내역, 금액을 모두 입력해주세요.'); return }
     const [yr, mo] = newExpense.date.split('-')
     await supabase.from('transactions').insert({
-      year: parseInt(yr), month: parseInt(mo),
-      date: newExpense.date, merchant: newExpense.merchant,
-      amount: parseInt(newExpense.amount),
-      card_type: '직접입력',
-      category_id: newExpense.category_id || null,
+      year: parseInt(yr), month: parseInt(mo), date: newExpense.date,
+      merchant: newExpense.merchant, amount: parseInt(newExpense.amount),
+      card_type: '직접입력', category_id: newExpense.category_id || null,
     })
     setNewExpense({ date: '', merchant: '', amount: '', category_id: '' })
     await fetchData()
@@ -130,9 +112,9 @@ function Income() {
     setSaving(true)
     const [yr, mo] = editForm.date.split('-')
     await supabase.from('transactions').update({
-      date: editForm.date, merchant: editForm.merchant,
-      amount: parseInt(editForm.amount), category_id: editForm.category_id || null,
-      card_type: editForm.card_type, year: parseInt(yr), month: parseInt(mo),
+      date: editForm.date, merchant: editForm.merchant, amount: parseInt(editForm.amount),
+      category_id: editForm.category_id || null, card_type: editForm.card_type,
+      year: parseInt(yr), month: parseInt(mo),
     }).eq('id', id)
     setEditingId(null)
     await fetchData()
@@ -149,50 +131,54 @@ function Income() {
   const totalCard = cardExpenses.reduce((s, t) => s + t.amount, 0)
   const uncategorizedCard = cardExpenses.filter(t => !t.category_id).length
 
-  function ExpenseRow({ t }) {
+  function ExpenseCard({ t }) {
     if (editingId === t.id) {
       return (
-        <tr style={{background: '#f6f8ff'}}>
-          <td><input type="date" value={editForm.date} onChange={e => setEditForm(p => ({...p, date: e.target.value}))} style={{width: '120px', fontSize: '12px'}} /></td>
-          <td><input type="text" value={editForm.merchant} onChange={e => setEditForm(p => ({...p, merchant: e.target.value}))} style={{width: '100px', fontSize: '12px'}} /></td>
-          <td>
-            <select value={editSelectedMain} onChange={e => { const f = expenseCategories.filter(c => c.main_category === e.target.value)[0]; setEditForm(p => ({...p, category_id: f?.id || ''})) }} style={{fontSize: '11px', width: '70px'}}>
-              <option value="">선택</option>
+        <div style={{background: '#f0f7ff', borderRadius: '10px', padding: '12px', marginBottom: '8px', display: 'flex', flexDirection: 'column', gap: '8px'}}>
+          <div style={{display: 'flex', gap: '6px'}}>
+            <input type="date" value={editForm.date} onChange={e => setEditForm(p => ({...p, date: e.target.value}))} style={{flex: 1, fontSize: '13px'}} />
+            <input type="number" value={editForm.amount} onChange={e => setEditForm(p => ({...p, amount: e.target.value}))} style={{width: '100px', textAlign: 'right', fontSize: '13px'}} />
+          </div>
+          <input type="text" value={editForm.merchant} onChange={e => setEditForm(p => ({...p, merchant: e.target.value}))} style={{width: '100%', fontSize: '13px'}} />
+          <div style={{display: 'flex', gap: '6px'}}>
+            <select value={editSelectedMain} onChange={e => { const f = expenseCategories.filter(c => c.main_category === e.target.value)[0]; setEditForm(p => ({...p, category_id: f?.id || ''})) }} style={{flex: 1, fontSize: '13px'}}>
+              <option value="">대분류</option>
               {expenseMainCategories.map(m => <option key={m} value={m}>{m}</option>)}
             </select>
-            <select value={editForm.category_id} onChange={e => setEditForm(p => ({...p, category_id: e.target.value}))} style={{fontSize: '11px', width: '70px'}} disabled={!editSelectedMain}>
-              <option value="">선택</option>
+            <select value={editForm.category_id} onChange={e => setEditForm(p => ({...p, category_id: e.target.value}))} disabled={!editSelectedMain} style={{flex: 1, fontSize: '13px'}}>
+              <option value="">소분류</option>
               {expenseCategories.filter(c => c.main_category === editSelectedMain).map(c => <option key={c.id} value={c.id}>{c.sub_category}</option>)}
             </select>
-          </td>
-          <td><input type="number" value={editForm.amount} onChange={e => setEditForm(p => ({...p, amount: e.target.value}))} style={{width: '90px', textAlign: 'right', fontSize: '12px'}} /></td>
-          <td>
-            <div style={{display: 'flex', gap: '4px'}}>
-              <button onClick={() => handleSaveEdit(t.id)} disabled={saving} style={{padding: '3px 8px', borderRadius: '4px', border: 'none', background: '#3182f6', color: 'white', fontSize: '11px', cursor: 'pointer'}}>저장</button>
-              <button onClick={() => setEditingId(null)} style={{padding: '3px 8px', borderRadius: '4px', border: '1px solid #e8ebed', background: 'white', fontSize: '11px', cursor: 'pointer'}}>취소</button>
-            </div>
-          </td>
-        </tr>
+          </div>
+          <div style={{display: 'flex', gap: '6px'}}>
+            <button onClick={() => handleSaveEdit(t.id)} disabled={saving} className="btn btn-primary" style={{flex: 1, padding: '8px'}}>저장</button>
+            <button onClick={() => setEditingId(null)} className="btn btn-secondary" style={{flex: 1, padding: '8px'}}>취소</button>
+          </div>
+        </div>
       )
     }
+
     return (
-      <tr>
-        <td style={{color: '#8b95a1', fontSize: '12px'}}>{t.date}</td>
-        <td style={{fontWeight: '500', fontSize: '13px'}}>{t.merchant}</td>
-        <td>
-          {t.categories
-            ? <span className="tag" style={{fontSize: '11px'}}>{t.categories.main_category} · {t.categories.sub_category}</span>
-            : <span style={{color: '#ff8c00', fontSize: '11px'}}>미분류</span>
-          }
-        </td>
-        <td style={{textAlign: 'right', fontWeight: '600', fontSize: '13px'}}>{t.amount.toLocaleString()}원</td>
-        <td>
-          <div style={{display: 'flex', gap: '4px'}}>
-            <button onClick={() => startEdit(t)} style={{padding: '3px 8px', borderRadius: '4px', border: '1px solid #e8ebed', background: 'white', fontSize: '11px', cursor: 'pointer', color: '#3182f6'}}>수정</button>
-            <button onClick={() => handleDeleteExpense(t.id)} style={{padding: '3px 8px', borderRadius: '4px', border: '1px solid #f04452', background: 'white', fontSize: '11px', cursor: 'pointer', color: '#f04452'}}>삭제</button>
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '10px 0', borderBottom: '1px solid #f2f4f6',
+      }}>
+        <div style={{flex: 1, minWidth: 0}}>
+          <div style={{display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px'}}>
+            <span style={{fontSize: '14px', fontWeight: '500', color: '#191f28', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>{t.merchant}</span>
+            {t.categories
+              ? <span className="tag" style={{fontSize: '11px', flexShrink: 0}}>{t.categories.main_category} · {t.categories.sub_category}</span>
+              : <span style={{color: '#ff8c00', fontSize: '11px', flexShrink: 0}}>미분류</span>
+            }
           </div>
-        </td>
-      </tr>
+          <span style={{fontSize: '12px', color: '#b0b8c1'}}>{t.date} {t.card_type && t.card_type !== '직접입력' ? `· ${t.card_type}` : ''}</span>
+        </div>
+        <div style={{display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0, marginLeft: '8px'}}>
+          <span style={{fontSize: '14px', fontWeight: '600', color: '#f04452'}}>{t.amount.toLocaleString()}원</span>
+          <button onClick={() => startEdit(t)} style={{padding: '4px 8px', borderRadius: '6px', border: '1px solid #e8ebed', background: 'white', fontSize: '12px', cursor: 'pointer', color: '#3182f6'}}>수정</button>
+          <button onClick={() => handleDeleteExpense(t.id)} style={{padding: '4px 8px', borderRadius: '6px', border: '1px solid #f04452', background: 'white', fontSize: '12px', cursor: 'pointer', color: '#f04452'}}>삭제</button>
+        </div>
+      </div>
     )
   }
 
@@ -234,7 +220,6 @@ function Income() {
         <div style={{color: '#8b95a1', textAlign: 'center', padding: '40px 0'}}>불러오는 중...</div>
       ) : tab === 'expense' ? (
         <div>
-          {/* 요약 */}
           <div style={{display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '20px'}}>
             <div className="stat-card">
               <div className="label">직접 입력</div>
@@ -252,7 +237,7 @@ function Income() {
 
           {uncategorizedCard > 0 && (
             <div style={{background: '#fff7e6', border: '1px solid #ffd591', borderRadius: '10px', padding: '12px 16px', marginBottom: '16px', fontSize: '14px', color: '#ff8c00', fontWeight: '500'}}>
-              ⚠ 카드 내역 중 미분류 {uncategorizedCard}건이 있어요. 카테고리 분류 페이지에서 분류해주세요.
+              ⚠ 카드 미분류 {uncategorizedCard}건이 있어요. 카테고리 분류 페이지에서 분류해주세요.
             </div>
           )}
 
@@ -264,12 +249,11 @@ function Income() {
                 <span style={{fontSize: '13px', fontWeight: '700', color: '#7c3aed'}}>{totalManual.toLocaleString()}원</span>
               </div>
 
-              {/* 추가 폼 */}
               <div style={{background: '#f9fafb', borderRadius: '10px', padding: '12px', marginBottom: '16px'}}>
                 <div style={{display: 'flex', flexDirection: 'column', gap: '8px'}}>
                   <div style={{display: 'flex', gap: '6px'}}>
                     <input type="date" value={newExpense.date} onChange={e => setNewExpense(p => ({...p, date: e.target.value}))} style={{flex: 1, fontSize: '13px'}} />
-                    <input type="number" placeholder="금액" value={newExpense.amount} onChange={e => setNewExpense(p => ({...p, amount: e.target.value}))} style={{width: '100px', textAlign: 'right', fontSize: '13px'}} />
+                    <input type="number" placeholder="금액" value={newExpense.amount} onChange={e => setNewExpense(p => ({...p, amount: e.target.value}))} style={{width: '90px', textAlign: 'right', fontSize: '13px'}} />
                   </div>
                   <input type="text" placeholder="내역 (예: 남편 용돈)" value={newExpense.merchant} onChange={e => setNewExpense(p => ({...p, merchant: e.target.value}))} style={{width: '100%', fontSize: '13px'}} />
                   <div style={{display: 'flex', gap: '6px'}}>
@@ -288,22 +272,7 @@ function Income() {
 
               {manualExpenses.length === 0 ? (
                 <p style={{color: '#b0b8c1', fontSize: '13px', textAlign: 'center', padding: '16px 0'}}>직접 입력한 지출이 없어요</p>
-              ) : (
-                <table>
-                  <thead>
-                    <tr>
-                      <th>날짜</th>
-                      <th>내역</th>
-                      <th>카테고리</th>
-                      <th style={{textAlign: 'right'}}>금액</th>
-                      <th></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {manualExpenses.map(t => <ExpenseRow key={t.id} t={t} />)}
-                  </tbody>
-                </table>
-              )}
+              ) : manualExpenses.map(t => <ExpenseCard key={t.id} t={t} />)}
             </div>
 
             {/* 오른쪽: 카드 내역 */}
@@ -315,22 +284,7 @@ function Income() {
 
               {cardExpenses.length === 0 ? (
                 <p style={{color: '#b0b8c1', fontSize: '13px', textAlign: 'center', padding: '16px 0'}}>카드 내역이 없어요</p>
-              ) : (
-                <table>
-                  <thead>
-                    <tr>
-                      <th>날짜</th>
-                      <th>가맹점</th>
-                      <th>카테고리</th>
-                      <th style={{textAlign: 'right'}}>금액</th>
-                      <th></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {cardExpenses.map(t => <ExpenseRow key={t.id} t={t} />)}
-                  </tbody>
-                </table>
-              )}
+              ) : cardExpenses.map(t => <ExpenseCard key={t.id} t={t} />)}
             </div>
           </div>
         </div>
