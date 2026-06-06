@@ -1,7 +1,6 @@
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom'
 import Dashboard from './pages/Dashboard'
 import Upload from './pages/Upload'
-import Categorize from './pages/Categorize'
 import MonthlyReport from './pages/MonthlyReport'
 import Assets from './pages/Assets'
 import Income from './pages/Income'
@@ -42,7 +41,6 @@ function App() {
             {[
               { to: '/', label: '대시보드' },
               { to: '/upload', label: '카드내역 업로드' },
-              { to: '/categorize', label: '카테고리 분류' },
               { to: '/income', label: '수입/저축/지출' },
               { to: '/monthly', label: '월별 리포트' },
               { to: '/yearly', label: '연간 결산' },
@@ -73,7 +71,6 @@ function App() {
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/upload" element={<Upload />} />
-              <Route path="/categorize" element={<Categorize />} />
               <Route path="/income" element={<Income />} />
               <Route path="/monthly" element={<MonthlyReport />} />
               <Route path="/yearly" element={<YearlySummary />} />
