@@ -175,3 +175,72 @@ tr:hover td { background: #fafafa; }
 .amount-positive { color: var(--success); }
 .amount-negative { color: var(--danger); }
 .amount-neutral { color: var(--primary); }
+/* 모바일 최적화 */
+@media (max-width: 768px) {
+  main {
+    padding: 16px 12px !important;
+  }
+
+  nav {
+    padding: 0 12px !important;
+    overflow-x: auto;
+    gap: 0 !important;
+  }
+
+  nav a {
+    font-size: 12px !important;
+    padding: 4px 8px !important;
+    white-space: nowrap;
+  }
+
+  h2 {
+    font-size: 18px !important;
+  }
+
+  /* 4열 그리드 → 2열 */
+  div[style*="repeat(4, 1fr)"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* 3열 그리드 → 1열 */
+  div[style*="repeat(3, 1fr)"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* 2열 그리드 → 1열 */
+  div[style*="1fr 1fr"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* 테이블 스크롤 */
+  table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  /* stat-card 값 폰트 축소 */
+  .stat-card .value {
+    font-size: 16px !important;
+  }
+
+  /* 카드 패딩 축소 */
+  .card {
+    padding: 16px !important;
+  }
+
+  .stat-card {
+    padding: 12px 16px !important;
+  }
+
+  /* 버튼 크기 */
+  .btn {
+    padding: 10px 16px !important;
+    font-size: 14px !important;
+  }
+
+  /* select, input 크기 */
+  select, input[type="text"], input[type="number"], input[type="date"] {
+    font-size: 16px !important; /* iOS 줌 방지 */
+  }
+}
