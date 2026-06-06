@@ -10,10 +10,32 @@ function Income() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
+  // 지출 직접 추가
+  const [manualExpenses, setManualExpenses] = useState([])
+  const [newExpense, setNewExpense] = useState({ date: '', merchant: '', amount: '', category_id: '' })
+  const [expenseCategories, setExpenseCategories] = useState([])
+
   useEffect(() => { fetchData() }, [tab, year, month])
 
   async function fetchData() {
     setLoading(true)
+
+    if (tab === 'expense') {
+      const [{ data: cats }, { data: txData }] = await Promise.all([
+        supabase.from('categories').select('*').eq('type', 'expense').order('sort_order'),
+        supabase.from('transactions')
+          .select('*, categories(main_category, sub_category)')
+          .eq('year', year)
+          .eq('month', month)
+          .eq('card_type', '직접입력')
+          .order('date', { ascending: false })
+      ])
+      setExpenseCategories(cats || [])
+      setManualExpenses(txData || [])
+      setLoading(false)
+      return
+    }
+
     const table = tab === 'income' ? 'incomes' : 'savings'
     const { data: cats } = await supabase
       .from('categories')
@@ -52,7 +74,6 @@ function Income() {
   async function handleDelete(categoryId) {
     const entry = entries.find(e => e.category_id === categoryId)
     if (!entry?.existing_id) return
-
     const table = tab === 'income' ? 'incomes' : 'savings'
     await supabase.from(table).delete().eq('id', entry.existing_id)
     await fetchData()
@@ -64,15 +85,11 @@ function Income() {
 
     for (const e of entries) {
       const amount = parseInt(e.amount)
-
-      // 금액이 비어있거나 0이면서 기존 데이터가 있으면 삭제
       if ((!e.amount || amount === 0) && e.existing_id) {
         await supabase.from(table).delete().eq('id', e.existing_id)
         continue
       }
-
       if (!e.amount || amount <= 0) continue
-
       const row = { year, month, category_id: e.category_id, amount, memo: e.memo }
       if (e.existing_id) {
         await supabase.from(table).update(row).eq('id', e.existing_id)
@@ -86,14 +103,45 @@ function Income() {
     alert('저장 완료!')
   }
 
+  async function handleAddExpense() {
+    if (!newExpense.date || !newExpense.merchant || !newExpense.amount) {
+      alert('날짜, 내역, 금액을 모두 입력해주세요.')
+      return
+    }
+    const [yr, mo] = newExpense.date.split('-')
+    const { error } = await supabase.from('transactions').insert({
+      year: parseInt(yr),
+      month: parseInt(mo),
+      date: newExpense.date,
+      merchant: newExpense.merchant,
+      amount: parseInt(newExpense.amount),
+      card_type: '직접입력',
+      category_id: newExpense.category_id || null,
+    })
+    if (error) {
+      alert('저장 실패: ' + error.message)
+    } else {
+      setNewExpense({ date: '', merchant: '', amount: '', category_id: '' })
+      await fetchData()
+    }
+  }
+
+  async function handleDeleteExpense(id) {
+    if (!window.confirm('삭제할까요?')) return
+    await supabase.from('transactions').delete().eq('id', id)
+    await fetchData()
+  }
+
   const mainCategories = [...new Set(categories.map(c => c.main_category))]
+  const expenseMainCategories = [...new Set(expenseCategories.map(c => c.main_category))]
   const total = entries.reduce((s, e) => s + (parseInt(e.amount) || 0), 0)
   const hasData = entries.some(e => e.existing_id)
+  const selectedMain = expenseCategories.find(c => c.id === newExpense.category_id)?.main_category || ''
 
   return (
     <div>
       <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px'}}>
-        <h2>수입 / 저축 입력</h2>
+        <h2>수입 / 저축 / 지출 입력</h2>
         <div style={{display: 'flex', gap: '8px'}}>
           <select value={year} onChange={e => setYear(parseInt(e.target.value))}>
             {[2024, 2025, 2026].map(y => <option key={y} value={y}>{y}년</option>)}
@@ -105,7 +153,7 @@ function Income() {
       </div>
 
       <div style={{display: 'flex', gap: '8px', marginBottom: '24px'}}>
-        {['income', 'saving'].map(t => (
+        {['income', 'saving', 'expense'].map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -120,12 +168,12 @@ function Income() {
               cursor: 'pointer',
             }}
           >
-            {t === 'income' ? '수입' : '저축'}
+            {t === 'income' ? '수입' : t === 'saving' ? '저축' : '지출'}
           </button>
         ))}
       </div>
 
-      {total > 0 && (
+      {tab !== 'expense' && total > 0 && (
         <div className="stat-card" style={{marginBottom: '20px', display: 'inline-block', minWidth: '200px'}}>
           <div className="label">{tab === 'income' ? '총 수입' : '총 저축'}</div>
           <div className="value" style={{color: tab === 'income' ? '#00b493' : '#3182f6'}}>
@@ -136,6 +184,131 @@ function Income() {
 
       {loading ? (
         <div style={{color: '#8b95a1', textAlign: 'center', padding: '40px 0'}}>불러오는 중...</div>
+      ) : tab === 'expense' ? (
+        <div>
+          {/* 직접 추가 폼 */}
+          <div className="card" style={{marginBottom: '16px'}}>
+            <h3 style={{marginBottom: '16px'}}>지출 직접 추가</h3>
+            <div style={{display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'flex-end'}}>
+              <div>
+                <div style={{fontSize: '12px', color: '#8b95a1', marginBottom: '4px'}}>날짜</div>
+                <input
+                  type="date"
+                  value={newExpense.date}
+                  onChange={e => setNewExpense(p => ({...p, date: e.target.value}))}
+                  style={{width: '140px'}}
+                />
+              </div>
+              <div style={{flex: 1, minWidth: '120px'}}>
+                <div style={{fontSize: '12px', color: '#8b95a1', marginBottom: '4px'}}>내역</div>
+                <input
+                  type="text"
+                  placeholder="ex) 남편 용돈"
+                  value={newExpense.merchant}
+                  onChange={e => setNewExpense(p => ({...p, merchant: e.target.value}))}
+                  style={{width: '100%'}}
+                />
+              </div>
+              <div>
+                <div style={{fontSize: '12px', color: '#8b95a1', marginBottom: '4px'}}>금액</div>
+                <input
+                  type="number"
+                  placeholder="0"
+                  value={newExpense.amount}
+                  onChange={e => setNewExpense(p => ({...p, amount: e.target.value}))}
+                  style={{width: '120px', textAlign: 'right'}}
+                />
+              </div>
+              <div>
+                <div style={{fontSize: '12px', color: '#8b95a1', marginBottom: '4px'}}>대분류</div>
+                <select
+                  value={selectedMain}
+                  onChange={e => {
+                    const firstSub = expenseCategories.filter(c => c.main_category === e.target.value)[0]
+                    setNewExpense(p => ({...p, category_id: firstSub?.id || ''}))
+                  }}
+                  style={{width: '100px'}}
+                >
+                  <option value="">선택</option>
+                  {expenseMainCategories.map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
+              </div>
+              <div>
+                <div style={{fontSize: '12px', color: '#8b95a1', marginBottom: '4px'}}>소분류</div>
+                <select
+                  value={newExpense.category_id}
+                  onChange={e => setNewExpense(p => ({...p, category_id: e.target.value}))}
+                  disabled={!selectedMain}
+                  style={{width: '100px'}}
+                >
+                  <option value="">선택</option>
+                  {expenseCategories.filter(c => c.main_category === selectedMain).map(c => (
+                    <option key={c.id} value={c.id}>{c.sub_category}</option>
+                  ))}
+                </select>
+              </div>
+              <button
+                onClick={handleAddExpense}
+                className="btn btn-primary"
+                style={{whiteSpace: 'nowrap'}}
+              >
+                + 추가
+              </button>
+            </div>
+          </div>
+
+          {/* 입력된 지출 목록 */}
+          <div className="card">
+            <h3 style={{marginBottom: '16px'}}>
+              직접 입력 지출
+              {manualExpenses.length > 0 && (
+                <span style={{fontSize: '14px', color: '#8b95a1', fontWeight: '400', marginLeft: '8px'}}>
+                  {manualExpenses.length}건 · {manualExpenses.reduce((s, t) => s + t.amount, 0).toLocaleString()}원
+                </span>
+              )}
+            </h3>
+            {manualExpenses.length === 0 ? (
+              <p style={{color: '#8b95a1', fontSize: '14px', textAlign: 'center', padding: '24px 0'}}>
+                직접 입력한 지출이 없어요
+              </p>
+            ) : (
+              <table>
+                <thead>
+                  <tr>
+                    <th>날짜</th>
+                    <th>내역</th>
+                    <th>카테고리</th>
+                    <th style={{textAlign: 'right'}}>금액</th>
+                    <th style={{textAlign: 'center'}}>삭제</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {manualExpenses.map(t => (
+                    <tr key={t.id}>
+                      <td style={{color: '#8b95a1', fontSize: '13px'}}>{t.date}</td>
+                      <td style={{fontWeight: '500'}}>{t.merchant}</td>
+                      <td>
+                        {t.categories
+                          ? <span className="tag">{t.categories.main_category} · {t.categories.sub_category}</span>
+                          : <span style={{color: '#ff8c00', fontSize: '12px'}}>미분류</span>
+                        }
+                      </td>
+                      <td style={{textAlign: 'right', fontWeight: '600'}}>{t.amount.toLocaleString()}원</td>
+                      <td style={{textAlign: 'center'}}>
+                        <button
+                          onClick={() => handleDeleteExpense(t.id)}
+                          style={{padding: '4px 10px', borderRadius: '6px', border: '1px solid #f04452', background: 'white', color: '#f04452', fontSize: '12px', cursor: 'pointer'}}
+                        >
+                          삭제
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
       ) : (
         <div className="card">
           {mainCategories.map(main => (
@@ -166,15 +339,7 @@ function Income() {
                           handleDelete(e.category_id)
                         }
                       }}
-                      style={{
-                        padding: '4px 10px',
-                        borderRadius: '6px',
-                        border: '1px solid #f04452',
-                        background: 'white',
-                        color: '#f04452',
-                        fontSize: '12px',
-                        cursor: 'pointer',
-                      }}
+                      style={{padding: '4px 10px', borderRadius: '6px', border: '1px solid #f04452', background: 'white', color: '#f04452', fontSize: '12px', cursor: 'pointer'}}
                     >
                       삭제
                     </button>
@@ -192,25 +357,12 @@ function Income() {
                     entries.filter(e => e.existing_id).forEach(e => handleDelete(e.category_id))
                   }
                 }}
-                style={{
-                  padding: '8px 16px',
-                  borderRadius: '8px',
-                  border: '1px solid #f04452',
-                  background: 'white',
-                  color: '#f04452',
-                  fontSize: '13px',
-                  cursor: 'pointer',
-                }}
+                style={{padding: '8px 16px', borderRadius: '8px', border: '1px solid #f04452', background: 'white', color: '#f04452', fontSize: '13px', cursor: 'pointer'}}
               >
                 이 달 전체 삭제
               </button>
             )}
-            <button
-              className="btn btn-primary"
-              onClick={handleSave}
-              disabled={saving}
-              style={{marginLeft: 'auto'}}
-            >
+            <button className="btn btn-primary" onClick={handleSave} disabled={saving} style={{marginLeft: 'auto'}}>
               {saving ? '저장 중...' : '저장'}
             </button>
           </div>
