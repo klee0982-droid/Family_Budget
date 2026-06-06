@@ -1,4 +1,155 @@
+import { useState } from 'react'
+import * as XLSX from 'xlsx'
+import { supabase } from '../lib/supabase'
+
 function Upload() {
-  return <div>카드내역 업로드</div>
+  const [transactions, setTransactions] = useState([])
+  const [fileName, setFileName] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+
+  function handleFile(e) {
+    const file = e.target.files[0]
+    if (!file) return
+    setFileName(file.name)
+    setSaved(false)
+
+    const reader = new FileReader()
+    reader.onload = (evt) => {
+      const wb = XLSX.read(evt.target.result, { type: 'binary' })
+      
+      let allTransactions = []
+      wb.SheetNames.forEach(sheetName => {
+        const sheet = wb.Sheets[sheetName]
+        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 })
+        if (rows[0] && rows[0].includes('거래일')) {
+          allTransactions = [...allTransactions, ...parseShinhan(rows)]
+        }
+        if (rows[0] && rows[0].includes('승인일자')) {
+          allTransactions = [...allTransactions, ...parseSamsung(rows)]
+        }
+      })
+      setTransactions(allTransactions)
+    }
+    reader.readAsBinaryString(file)
+  }
+
+  function parseShinhan(rows) {
+    const header = rows[0]
+    const dateIdx = header.indexOf('거래일')
+    const merchantIdx = header.indexOf('가맹점명')
+    const amountIdx = header.indexOf('금액')
+    const cancelIdx = header.indexOf('취소상태')
+    const statusIdx = header.indexOf('매입구분')
+
+    return rows.slice(1)
+      .filter(row => row && row[merchantIdx])
+      .filter(row => row[cancelIdx] !== '취소' && row[cancelIdx] !== '거래취소')
+      .filter(row => row[statusIdx] === '결제확정')
+      .map(row => ({
+        date: row[dateIdx]?.toString().substring(0, 10).replace(/\./g, '-'),
+        merchant: row[merchantIdx],
+        amount: parseInt(row[amountIdx]?.toString().replace(/,/g, '') || 0),
+        card_type: '신한',
+      }))
+      .filter(t => t.amount > 0)
+  }
+
+function parseSamsung(rows) {
+  const header = rows[0]
+  const dateIdx = header.indexOf('승인일자')
+  const merchantIdx = header.indexOf('가맹점명')
+  const amountIdx = header.indexOf('승인금액(원)')
+  const cancelIdx = header.indexOf('취소여부')
+
+  return rows.slice(1)
+    .filter(row => row && row[merchantIdx])
+    .filter(row => row[cancelIdx] !== 'Y')
+    .map(row => ({
+      date: row[dateIdx]?.toString().replace(/\./g, '-'),
+      merchant: row[merchantIdx],
+      amount: parseInt(row[amountIdx] || 0),
+      card_type: '삼성',
+    }))
+    .filter(t => t.amount > 0)
 }
+  async function handleSave() {
+    if (transactions.length === 0) return
+    setSaving(true)
+
+    const rows = transactions.map(t => {
+      const [year, month] = t.date.split('-')
+      return {
+        year: parseInt(year),
+        month: parseInt(month),
+        date: t.date,
+        merchant: t.merchant,
+        amount: t.amount,
+        card_type: t.card_type,
+      }
+    })
+
+    const { error } = await supabase.from('transactions').insert(rows)
+
+    if (error) {
+      alert('저장 실패: ' + error.message)
+    } else {
+      setSaved(true)
+      setTransactions([])
+      setFileName('')
+    }
+    setSaving(false)
+  }
+
+  return (
+    <div style={{maxWidth: '800px'}}>
+      <h2>카드내역 업로드</h2>
+      
+      <div style={{border: '2px dashed #ccc', borderRadius: '8px', padding: '32px', textAlign: 'center', marginBottom: '24px'}}>
+        <input type="file" accept=".xlsx,.xls" onChange={handleFile} />
+        {fileName && <p style={{marginTop: '8px', color: '#666'}}>{fileName}</p>}
+      </div>
+
+      {saved && (
+        <p style={{color: 'green', marginBottom: '16px'}}>저장 완료!</p>
+      )}
+
+      {transactions.length > 0 && (
+        <div>
+          <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px'}}>
+            <p>{transactions.length}건 파싱됨</p>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              style={{padding: '8px 20px', backgroundColor: '#4f46e5', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer'}}
+            >
+              {saving ? '저장 중...' : 'Supabase에 저장'}
+            </button>
+          </div>
+          <table style={{width: '100%', borderCollapse: 'collapse', fontSize: '14px'}}>
+            <thead>
+              <tr style={{borderBottom: '2px solid #eee'}}>
+                <th style={{padding: '8px', textAlign: 'left'}}>날짜</th>
+                <th style={{padding: '8px', textAlign: 'left'}}>가맹점</th>
+                <th style={{padding: '8px', textAlign: 'right'}}>금액</th>
+                <th style={{padding: '8px', textAlign: 'center'}}>카드</th>
+              </tr>
+            </thead>
+            <tbody>
+              {transactions.map((t, i) => (
+                <tr key={i} style={{borderBottom: '1px solid #f0f0f0'}}>
+                  <td style={{padding: '8px'}}>{t.date}</td>
+                  <td style={{padding: '8px'}}>{t.merchant}</td>
+                  <td style={{padding: '8px', textAlign: 'right'}}>{t.amount.toLocaleString()}원</td>
+                  <td style={{padding: '8px', textAlign: 'center'}}>{t.card_type}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default Upload
