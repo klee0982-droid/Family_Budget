@@ -49,19 +49,38 @@ function Income() {
     )
   }
 
+  async function handleDelete(categoryId) {
+    const entry = entries.find(e => e.category_id === categoryId)
+    if (!entry?.existing_id) return
+
+    const table = tab === 'income' ? 'incomes' : 'savings'
+    await supabase.from(table).delete().eq('id', entry.existing_id)
+    await fetchData()
+  }
+
   async function handleSave() {
     setSaving(true)
     const table = tab === 'income' ? 'incomes' : 'savings'
-    const toSave = entries.filter(e => e.amount !== '' && parseInt(e.amount) > 0)
 
-    for (const e of toSave) {
-      const row = { year, month, category_id: e.category_id, amount: parseInt(e.amount), memo: e.memo }
+    for (const e of entries) {
+      const amount = parseInt(e.amount)
+
+      // 금액이 비어있거나 0이면서 기존 데이터가 있으면 삭제
+      if ((!e.amount || amount === 0) && e.existing_id) {
+        await supabase.from(table).delete().eq('id', e.existing_id)
+        continue
+      }
+
+      if (!e.amount || amount <= 0) continue
+
+      const row = { year, month, category_id: e.category_id, amount, memo: e.memo }
       if (e.existing_id) {
         await supabase.from(table).update(row).eq('id', e.existing_id)
       } else {
         await supabase.from(table).insert(row)
       }
     }
+
     await fetchData()
     setSaving(false)
     alert('저장 완료!')
@@ -69,6 +88,7 @@ function Income() {
 
   const mainCategories = [...new Set(categories.map(c => c.main_category))]
   const total = entries.reduce((s, e) => s + (parseInt(e.amount) || 0), 0)
+  const hasData = entries.some(e => e.existing_id)
 
   return (
     <div>
@@ -139,13 +159,58 @@ function Income() {
                     onChange={ev => handleChange(e.category_id, 'memo', ev.target.value)}
                     style={{flex: 1}}
                   />
+                  {e.existing_id && (
+                    <button
+                      onClick={() => {
+                        if (window.confirm(`${e.sub_category} 데이터를 삭제할까요?`)) {
+                          handleDelete(e.category_id)
+                        }
+                      }}
+                      style={{
+                        padding: '4px 10px',
+                        borderRadius: '6px',
+                        border: '1px solid #f04452',
+                        background: 'white',
+                        color: '#f04452',
+                        fontSize: '12px',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      삭제
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
           ))}
 
-          <div style={{borderTop: '1px solid #e8ebed', paddingTop: '20px', display: 'flex', justifyContent: 'flex-end'}}>
-            <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+          <div style={{borderTop: '1px solid #e8ebed', paddingTop: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+            {hasData && (
+              <button
+                onClick={() => {
+                  if (window.confirm('이 달 전체 데이터를 삭제할까요?')) {
+                    entries.filter(e => e.existing_id).forEach(e => handleDelete(e.category_id))
+                  }
+                }}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  border: '1px solid #f04452',
+                  background: 'white',
+                  color: '#f04452',
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                }}
+              >
+                이 달 전체 삭제
+              </button>
+            )}
+            <button
+              className="btn btn-primary"
+              onClick={handleSave}
+              disabled={saving}
+              style={{marginLeft: 'auto'}}
+            >
               {saving ? '저장 중...' : '저장'}
             </button>
           </div>
