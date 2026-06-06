@@ -42,7 +42,7 @@ function App() {
               { to: '/', label: '대시보드' },
               { to: '/upload', label: '카드내역 업로드' },
               { to: '/categorize', label: '카테고리 분류' },
-              { to: '/income', label: '수입/저축' },
+              { to: '/income', label: '수입/저축/지출' },
               { to: '/monthly', label: '월별 리포트' },
               { to: '/yearly', label: '연간 결산' },
               { to: '/assets', label: '자산 현황' },
