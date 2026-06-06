@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts'
 
+const defaultMonth = new Date().getMonth() === 0 ? 12 : new Date().getMonth()
+const defaultYear = new Date().getMonth() === 0 ? new Date().getFullYear() - 1 : new Date().getFullYear()
+
 function Assets() {
   const [latestAssets, setLatestAssets] = useState([])
   const [prevAssets, setPrevAssets] = useState([])
@@ -10,7 +13,8 @@ function Assets() {
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [editMonth, setEditMonth] = useState(new Date().getMonth() + 1)
+  const [editMonth, setEditMonth] = useState(defaultMonth)
+  const [editYear, setEditYear] = useState(defaultYear)
   const [editAssets, setEditAssets] = useState([])
   const [alerts, setAlerts] = useState([])
 
@@ -78,18 +82,10 @@ function Assets() {
     )
   }
 
-  function getDiff(sub) {
-    const curr = latestAssets.find(a => a.sub_category === sub)?.amount || 0
-    const prev = prevAssets.find(a => a.sub_category === sub)?.amount || 0
-    return curr - prev
-  }
-
   async function startEditing() {
-    const currentMonth = new Date().getMonth() + 1
-    setEditMonth(currentMonth)
-
+    // editMonth/editYear 기준으로 데이터 불러오기
     const { data: currentData } = await supabase
-      .from('assets').select('*').eq('year', year).eq('month', currentMonth)
+      .from('assets').select('*').eq('year', editYear).eq('month', editMonth)
 
     let sourceData = currentData || []
     if (sourceData.length === 0) {
@@ -117,6 +113,40 @@ function Assets() {
     setEditing(true)
   }
 
+  // editMonth/editYear 바뀌면 자동으로 데이터 다시 불러오기
+  useEffect(() => {
+    if (!editing) return
+    async function reloadEdit() {
+      const { data: currentData } = await supabase
+        .from('assets').select('*').eq('year', editYear).eq('month', editMonth)
+
+      let sourceData = currentData || []
+      if (sourceData.length === 0) {
+        const { data: latestData } = await supabase
+          .from('assets').select('*').eq('year', year).order('month', { ascending: false }).limit(50)
+        const latestMonth = latestData?.[0]?.month
+        sourceData = latestData?.filter(a => a.month === latestMonth) || []
+      }
+
+      const dataMap = {}
+      sourceData.forEach(a => { dataMap[`${a.asset_type}-${a.sub_category}`] = a })
+
+      const filled = assetStructure.flatMap(group =>
+        group.subs.map(sub => ({
+          asset_type: group.type,
+          main_category: group.main,
+          sub_category: sub,
+          prevAmount: dataMap[`${group.type}-${sub}`]?.amount || 0,
+          amount: dataMap[`${group.type}-${sub}`]?.amount || 0,
+          id: (currentData || []).find(a => a.sub_category === sub)?.id || null,
+        }))
+      )
+      setEditAssets(filled)
+      setAlerts([])
+    }
+    reloadEdit()
+  }, [editMonth, editYear])
+
   function handleChange(sub, value) {
     const updated = editAssets.map(a => a.sub_category === sub ? { ...a, amount: value } : a)
     setEditAssets(updated)
@@ -139,7 +169,7 @@ function Assets() {
     setSaving(true)
     for (const a of editAssets) {
       const row = {
-        year, month: editMonth,
+        year: editYear, month: editMonth,
         asset_type: a.asset_type,
         main_category: a.main_category,
         sub_category: a.sub_category,
@@ -170,6 +200,12 @@ function Assets() {
 
   const groups = [...new Map(assetStructure.map(g => [g.main, g])).values()]
 
+  function getDiff(sub) {
+    const curr = latestAssets.find(a => a.sub_category === sub)?.amount || 0
+    const prev = prevAssets.find(a => a.sub_category === sub)?.amount || 0
+    return curr - prev
+  }
+
   if (loading) return <div style={{color: '#8b95a1', padding: '40px 0', textAlign: 'center'}}>불러오는 중...</div>
 
   return (
@@ -177,7 +213,7 @@ function Assets() {
       <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px'}}>
         <h2>자산 현황</h2>
         {!editing && (
-          <button className="btn btn-secondary" onClick={startEditing}>이번 달 업데이트</button>
+          <button className="btn btn-secondary" onClick={startEditing}>자산 업데이트</button>
         )}
       </div>
 
@@ -220,12 +256,9 @@ function Assets() {
                       key={f}
                       onClick={() => toggleFilter(f)}
                       style={{
-                        padding: '4px 12px',
-                        borderRadius: '20px',
+                        padding: '4px 12px', borderRadius: '20px',
                         border: `2px solid ${filterColors[f]}`,
-                        fontSize: '12px',
-                        fontWeight: '600',
-                        cursor: 'pointer',
+                        fontSize: '12px', fontWeight: '600', cursor: 'pointer',
                         background: activeFilters.includes(f) ? filterColors[f] : 'white',
                         color: activeFilters.includes(f) ? 'white' : filterColors[f],
                         transition: 'all 0.15s',
@@ -291,7 +324,15 @@ function Assets() {
       ) : (
         <div className="card">
           <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px'}}>
-            <h3>{editMonth}월 자산 업데이트</h3>
+            <div style={{display: 'flex', alignItems: 'center', gap: '12px'}}>
+              <h3>자산 업데이트</h3>
+              <select value={editYear} onChange={e => setEditYear(parseInt(e.target.value))}>
+                {[2024, 2025, 2026].map(y => <option key={y} value={y}>{y}년</option>)}
+              </select>
+              <select value={editMonth} onChange={e => setEditMonth(parseInt(e.target.value))}>
+                {Array.from({length: 12}, (_, i) => i + 1).map(m => <option key={m} value={m}>{m}월</option>)}
+              </select>
+            </div>
             <div style={{display: 'flex', gap: '8px'}}>
               <button className="btn btn-secondary" onClick={() => { setEditing(false); setAlerts([]) }}>취소</button>
               <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
@@ -326,14 +367,9 @@ function Assets() {
                 const diff = curr - prev
                 return (
                   <div key={a.sub_category} style={{
-                    display: 'grid',
-                    gridTemplateColumns: '1fr 1fr 1fr',
-                    gap: '8px',
-                    alignItems: 'center',
-                    marginBottom: '8px',
-                    padding: '8px',
-                    borderRadius: '8px',
-                    background: hasAlert ? '#fff7e6' : 'transparent',
+                    display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px',
+                    alignItems: 'center', marginBottom: '8px', padding: '8px',
+                    borderRadius: '8px', background: hasAlert ? '#fff7e6' : 'transparent',
                   }}>
                     <span style={{fontSize: '14px', color: '#191f28'}}>{a.sub_category}</span>
                     <div style={{textAlign: 'right'}}>
