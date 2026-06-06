@@ -5,6 +5,7 @@ import Categorize from './pages/Categorize'
 import MonthlyReport from './pages/MonthlyReport'
 import Assets from './pages/Assets'
 import Income from './pages/Income'
+import YearlySummary from './pages/YearlySummary'
 
 function App() {
   return (
@@ -41,6 +42,7 @@ function App() {
             { to: '/categorize', label: '카테고리 분류' },
             { to: '/income', label: '수입/저축' },
             { to: '/monthly', label: '월별 리포트' },
+            { to: '/yearly', label: '연간 결산' },
             { to: '/assets', label: '자산 현황' },
           ].map(({ to, label }) => (
             <NavLink
@@ -70,6 +72,7 @@ function App() {
             <Route path="/categorize" element={<Categorize />} />
             <Route path="/income" element={<Income />} />
             <Route path="/monthly" element={<MonthlyReport />} />
+            <Route path="/yearly" element={<YearlySummary />} />
             <Route path="/assets" element={<Assets />} />
           </Routes>
         </main>
