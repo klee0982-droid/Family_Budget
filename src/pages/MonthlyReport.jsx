@@ -1,14 +1,17 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 
+const defaultMonth = new Date().getMonth() === 0 ? 12 : new Date().getMonth()
+const defaultYear = new Date().getMonth() === 0 ? new Date().getFullYear() - 1 : new Date().getFullYear()
+
 function MonthlyReport() {
-  const [year, setYear] = useState(new Date().getFullYear())
-  const [month, setMonth] = useState(new Date().getMonth() === 0 ? 12 : new Date().getMonth())
+  const [year, setYear] = useState(defaultYear)
+  const [month, setMonth] = useState(defaultMonth)
   const [incomes, setIncomes] = useState([])
   const [savings, setSavings] = useState([])
   const [transactions, setTransactions] = useState([])
   const [loading, setLoading] = useState(true)
-  const [openSection, setOpenSection] = useState(null) // 'income' | 'saving' | 'expense'
+  const [openSections, setOpenSections] = useState(new Set())
 
   useEffect(() => { fetchData() }, [year, month])
 
@@ -23,6 +26,14 @@ function MonthlyReport() {
     setSavings(sav || [])
     setTransactions(tx || [])
     setLoading(false)
+  }
+
+  function toggleSection(key) {
+    setOpenSections(prev => {
+      const next = new Set(prev)
+      next.has(key) ? next.delete(key) : next.add(key)
+      return next
+    })
   }
 
   function groupByCategory(list) {
@@ -49,12 +60,12 @@ function MonthlyReport() {
   const uncategorized = transactions.filter(t => !t.category_id)
 
   function SectionCard({ title, total, color, groups, sectionKey, emptyText, detailRenderer }) {
-    const isOpen = openSection === sectionKey
+    const isOpen = openSections.has(sectionKey)
     return (
       <div className="card">
         <div
           style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', marginBottom: isOpen ? '16px' : 0}}
-          onClick={() => setOpenSection(isOpen ? null : sectionKey)}
+          onClick={() => toggleSection(sectionKey)}
         >
           <div style={{display: 'flex', alignItems: 'center', gap: '12px'}}>
             <h3>{title}</h3>
@@ -105,7 +116,6 @@ function MonthlyReport() {
         <div style={{color: '#8b95a1', padding: '40px 0', textAlign: 'center'}}>불러오는 중...</div>
       ) : (
         <>
-          {/* 요약 카드 */}
           <div style={{display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '24px'}}>
             {[
               { label: '수입', value: totalIncome, color: '#00b493' },
@@ -124,12 +134,11 @@ function MonthlyReport() {
 
           {uncategorized.length > 0 && (
             <div style={{background: '#fff7e6', border: '1px solid #ffd591', borderRadius: '10px', padding: '12px 16px', marginBottom: '20px', fontSize: '14px', color: '#ff8c00', fontWeight: '500'}}>
-              ⚠ 미분류 거래 {uncategorized.length}건이 있어요. 카테고리 분류 페이지에서 분류해주세요.
+              ⚠ 미분류 거래 {uncategorized.length}건이 있어요. 수입/저축/지출 페이지에서 분류해주세요.
             </div>
           )}
 
           <div style={{display: 'flex', flexDirection: 'column', gap: '16px'}}>
-            {/* 수입 섹션 */}
             <SectionCard
               title="수입"
               total={totalIncome}
@@ -145,7 +154,6 @@ function MonthlyReport() {
               )}
             />
 
-            {/* 저축 섹션 */}
             <SectionCard
               title="저축"
               total={totalSaving}
@@ -161,7 +169,6 @@ function MonthlyReport() {
               )}
             />
 
-            {/* 지출 섹션 */}
             <SectionCard
               title="지출"
               total={totalExpense}

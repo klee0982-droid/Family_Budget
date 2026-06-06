@@ -16,11 +16,14 @@ function Income() {
   const [manualExpenses, setManualExpenses] = useState([])
   const [cardExpenses, setCardExpenses] = useState([])
   const [uncategorizedExpenses, setUncategorizedExpenses] = useState([])
+  const [prevManualExpenses, setPrevManualExpenses] = useState([])
   const [newExpense, setNewExpense] = useState({ date: '', merchant: '', amount: '', category_id: '' })
   const [expenseCategories, setExpenseCategories] = useState([])
   const [editingId, setEditingId] = useState(null)
   const [editForm, setEditForm] = useState({})
   const [showUncategorized, setShowUncategorized] = useState(true)
+  const [showPrevManual, setShowPrevManual] = useState(false)
+  const [copyingPrev, setCopyingPrev] = useState(false)
 
   useEffect(() => { fetchData() }, [tab, year, month])
 
@@ -28,13 +31,21 @@ function Income() {
     setLoading(true)
 
     if (tab === 'expense') {
-      const [{ data: cats }, { data: txData }, { data: rules }] = await Promise.all([
+      const prevMonth = month === 1 ? 12 : month - 1
+      const prevYear = month === 1 ? year - 1 : year
+
+      const [{ data: cats }, { data: txData }, { data: rules }, { data: prevTxData }] = await Promise.all([
         supabase.from('categories').select('*').eq('type', 'expense').order('sort_order'),
         supabase.from('transactions')
           .select('*, categories(main_category, sub_category)')
           .eq('year', year).eq('month', month)
           .order('date', { ascending: false }),
         supabase.from('merchant_rules').select('*, categories(*)'),
+        supabase.from('transactions')
+          .select('*, categories(main_category, sub_category)')
+          .eq('year', prevYear).eq('month', prevMonth)
+          .eq('card_type', '직접입력')
+          .order('date', { ascending: false }),
       ])
       setExpenseCategories(cats || [])
 
@@ -51,6 +62,7 @@ function Income() {
       setUncategorizedExpenses(uncat)
       setManualExpenses(allTx.filter(t => t.category_id && t.card_type === '직접입력'))
       setCardExpenses(allTx.filter(t => t.category_id && t.card_type !== '직접입력'))
+      setPrevManualExpenses(prevTxData || [])
       setLoading(false)
       return
     }
@@ -63,16 +75,11 @@ function Income() {
     const existingMap = {}
     ;(existing || []).forEach(e => { existingMap[e.category_id] = e })
 
-    // 이번 달 데이터 없으면 전달 데이터 불러오기
     let prevMap = {}
     if (Object.keys(existingMap).length === 0) {
       const prevMonth = month === 1 ? 12 : month - 1
       const prevYear = month === 1 ? year - 1 : year
-      const { data: prevData } = await supabase
-        .from(table)
-        .select('*')
-        .eq('year', prevYear)
-        .eq('month', prevMonth)
+      const { data: prevData } = await supabase.from(table).select('*').eq('year', prevYear).eq('month', prevMonth)
       ;(prevData || []).forEach(e => { prevMap[e.category_id] = e })
     }
 
@@ -174,6 +181,26 @@ function Income() {
     setSaving(false)
   }
 
+  // 전달 직접 입력 내역 이번 달로 복사
+  async function handleCopyPrevManual() {
+    if (!window.confirm(`전달 직접 입력 내역 ${prevManualExpenses.length}건을 이번 달로 복사할까요?`)) return
+    setCopyingPrev(true)
+    // 날짜를 이번 달 1일로 변경해서 복사
+    const rows = prevManualExpenses.map(t => ({
+      year,
+      month,
+      date: `${year}-${String(month).padStart(2, '0')}-01`,
+      merchant: t.merchant,
+      amount: t.amount,
+      card_type: '직접입력',
+      category_id: t.category_id || null,
+    }))
+    await supabase.from('transactions').insert(rows)
+    await fetchData()
+    setCopyingPrev(false)
+    setShowPrevManual(false)
+  }
+
   const mainCategories = [...new Set(categories.map(c => c.main_category))]
   const expenseMainCategories = [...new Set(expenseCategories.map(c => c.main_category))]
   const total = entries.reduce((s, e) => s + (parseInt(e.amount) || 0), 0)
@@ -184,6 +211,7 @@ function Income() {
   const totalManual = manualExpenses.reduce((s, t) => s + t.amount, 0)
   const totalCard = cardExpenses.reduce((s, t) => s + t.amount, 0)
   const uncatReadyCount = uncategorizedExpenses.filter(t => t.suggestedCategory).length
+  const hasManualThisMonth = manualExpenses.length > 0
 
   function ExpenseCard({ t }) {
     if (editingId === t.id) {
@@ -232,6 +260,8 @@ function Income() {
     )
   }
 
+  const prevMonth = month === 1 ? 12 : month - 1
+
   return (
     <div>
       <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px'}}>
@@ -274,6 +304,7 @@ function Income() {
         <div style={{color: '#8b95a1', textAlign: 'center', padding: '40px 0'}}>불러오는 중...</div>
       ) : tab === 'expense' ? (
         <div>
+          {/* 미분류 섹션 */}
           {uncategorizedExpenses.length > 0 && (
             <div className="card" style={{marginBottom: '16px', border: '1px solid #ffd591'}}>
               <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer'}} onClick={() => setShowUncategorized(!showUncategorized)}>
@@ -321,6 +352,7 @@ function Income() {
             </div>
           )}
 
+          {/* 요약 */}
           <div style={{display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '20px'}}>
             <div className="stat-card">
               <div className="label">직접 입력</div>
@@ -337,11 +369,53 @@ function Income() {
           </div>
 
           <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px'}}>
+            {/* 직접 입력 */}
             <div className="card">
               <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px'}}>
                 <h3>직접 입력</h3>
                 <span style={{fontSize: '13px', fontWeight: '700', color: '#7c3aed'}}>{totalManual.toLocaleString()}원</span>
               </div>
+
+              {/* 전달 내역 참고 배너 */}
+              {!hasManualThisMonth && prevManualExpenses.length > 0 && (
+                <div style={{background: '#ebf3fe', border: '1px solid #c3d9fd', borderRadius: '10px', padding: '10px 14px', marginBottom: '12px'}}>
+                  <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: showPrevManual ? '10px' : 0}}>
+                    <div>
+                      <span style={{fontSize: '13px', color: '#3182f6', fontWeight: '600'}}>💡 {prevMonth}월 직접 입력 내역 {prevManualExpenses.length}건</span>
+                      <span style={{fontSize: '12px', color: '#8b95a1', marginLeft: '6px'}}>참고하거나 복사할 수 있어요</span>
+                    </div>
+                    <div style={{display: 'flex', gap: '6px'}}>
+                      <button
+                        onClick={() => setShowPrevManual(!showPrevManual)}
+                        style={{padding: '4px 10px', borderRadius: '6px', border: '1px solid #c3d9fd', background: 'white', fontSize: '12px', cursor: 'pointer', color: '#3182f6'}}
+                      >
+                        {showPrevManual ? '접기' : '보기'}
+                      </button>
+                      <button
+                        onClick={handleCopyPrevManual}
+                        disabled={copyingPrev}
+                        style={{padding: '4px 10px', borderRadius: '6px', border: 'none', background: '#3182f6', color: 'white', fontSize: '12px', cursor: 'pointer', fontWeight: '600'}}
+                      >
+                        {copyingPrev ? '복사 중...' : '전체 복사'}
+                      </button>
+                    </div>
+                  </div>
+                  {showPrevManual && (
+                    <div>
+                      {prevManualExpenses.map(t => (
+                        <div key={t.id} style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', borderBottom: '1px solid #dbeafe'}}>
+                          <div>
+                            <span style={{fontSize: '13px', color: '#191f28', fontWeight: '500'}}>{t.merchant}</span>
+                            {t.categories && <span className="tag" style={{fontSize: '11px', marginLeft: '6px'}}>{t.categories.main_category} · {t.categories.sub_category}</span>}
+                          </div>
+                          <span style={{fontSize: '13px', fontWeight: '600', color: '#7c3aed'}}>{t.amount.toLocaleString()}원</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div style={{background: '#f9fafb', borderRadius: '10px', padding: '12px', marginBottom: '16px'}}>
                 <div style={{display: 'flex', flexDirection: 'column', gap: '8px'}}>
                   <div style={{display: 'flex', gap: '6px'}}>
@@ -368,6 +442,7 @@ function Income() {
               }
             </div>
 
+            {/* 카드 내역 */}
             <div className="card">
               <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px'}}>
                 <h3>카드 내역</h3>
@@ -405,13 +480,7 @@ function Income() {
                     }}
                   />
                   <span style={{fontSize: '13px', color: '#8b95a1'}}>원</span>
-                  <input
-                    type="text"
-                    placeholder="메모 (선택)"
-                    value={e.memo}
-                    onChange={ev => handleChange(e.category_id, 'memo', ev.target.value)}
-                    style={{flex: 1}}
-                  />
+                  <input type="text" placeholder="메모 (선택)" value={e.memo} onChange={ev => handleChange(e.category_id, 'memo', ev.target.value)} style={{flex: 1}} />
                   {e.existing_id && (
                     <button onClick={() => { if (window.confirm(`${e.sub_category} 데이터를 삭제할까요?`)) handleDelete(e.category_id) }} style={{padding: '4px 10px', borderRadius: '6px', border: '1px solid #f04452', background: 'white', color: '#f04452', fontSize: '12px', cursor: 'pointer'}}>삭제</button>
                   )}
