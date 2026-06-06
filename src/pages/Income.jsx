@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 
+const defaultMonth = new Date().getMonth() === 0 ? 12 : new Date().getMonth()
+const defaultYear = new Date().getMonth() === 0 ? new Date().getFullYear() - 1 : new Date().getFullYear()
+
 function Income() {
   const [tab, setTab] = useState('income')
   const [categories, setCategories] = useState([])
   const [entries, setEntries] = useState([])
-  const [year, setYear] = useState(new Date().getFullYear())
-  const [month, setMonth] = useState(new Date().getMonth() === 0 ? 12 : new Date().getMonth())
+  const [year, setYear] = useState(defaultYear)
+  const [month, setMonth] = useState(defaultMonth)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
@@ -38,7 +41,6 @@ function Income() {
       const allTx = txData || []
       const ruleList = rules || []
 
-      // 미분류 — 자동 매핑 룰 적용해서 보여주기
       const uncat = allTx
         .filter(t => !t.category_id)
         .map(t => {
@@ -61,20 +63,38 @@ function Income() {
     const existingMap = {}
     ;(existing || []).forEach(e => { existingMap[e.category_id] = e })
 
+    // 이번 달 데이터 없으면 전달 데이터 불러오기
+    let prevMap = {}
+    if (Object.keys(existingMap).length === 0) {
+      const prevMonth = month === 1 ? 12 : month - 1
+      const prevYear = month === 1 ? year - 1 : year
+      const { data: prevData } = await supabase
+        .from(table)
+        .select('*')
+        .eq('year', prevYear)
+        .eq('month', prevMonth)
+      ;(prevData || []).forEach(e => { prevMap[e.category_id] = e })
+    }
+
     setCategories(catList)
-    setEntries(catList.map(c => ({
-      category_id: c.id,
-      main_category: c.main_category,
-      sub_category: c.sub_category,
-      amount: existingMap[c.id]?.amount || '',
-      memo: existingMap[c.id]?.memo || '',
-      existing_id: existingMap[c.id]?.id || null,
-    })))
+    setEntries(catList.map(c => {
+      const current = existingMap[c.id]
+      const prev = prevMap[c.id]
+      return {
+        category_id: c.id,
+        main_category: c.main_category,
+        sub_category: c.sub_category,
+        amount: current?.amount || prev?.amount || '',
+        memo: current?.memo || prev?.memo || '',
+        existing_id: current?.id || null,
+        isPrefilled: !current && !!prev,
+      }
+    }))
     setLoading(false)
   }
 
   function handleChange(categoryId, field, value) {
-    setEntries(prev => prev.map(e => e.category_id === categoryId ? { ...e, [field]: value } : e))
+    setEntries(prev => prev.map(e => e.category_id === categoryId ? { ...e, [field]: value, isPrefilled: false } : e))
   }
 
   async function handleDelete(categoryId) {
@@ -137,12 +157,10 @@ function Income() {
     setSaving(false)
   }
 
-  // 미분류 카테고리 변경
   function handleUncatChange(id, categoryId) {
     setUncategorizedExpenses(prev => prev.map(t => t.id === id ? { ...t, suggestedCategory: categoryId, autoMapped: false } : t))
   }
 
-  // 미분류 일괄 저장
   async function handleUncatSave() {
     setSaving(true)
     const toUpdate = uncategorizedExpenses.filter(t => t.suggestedCategory)
@@ -160,6 +178,7 @@ function Income() {
   const expenseMainCategories = [...new Set(expenseCategories.map(c => c.main_category))]
   const total = entries.reduce((s, e) => s + (parseInt(e.amount) || 0), 0)
   const hasData = entries.some(e => e.existing_id)
+  const hasPrefilled = entries.some(e => e.isPrefilled)
   const selectedMain = expenseCategories.find(c => c.id === newExpense.category_id)?.main_category || ''
   const editSelectedMain = expenseCategories.find(c => c.id === editForm.category_id)?.main_category || ''
   const totalManual = manualExpenses.reduce((s, t) => s + t.amount, 0)
@@ -236,7 +255,9 @@ function Income() {
             color: tab === t ? 'white' : '#8b95a1',
           }}>
             {t === 'income' ? '수입' : t === 'saving' ? '저축' : (
-              <span>지출 {uncategorizedExpenses.length > 0 && tab !== 'expense' && <span style={{background: '#f04452', color: 'white', borderRadius: '10px', padding: '1px 6px', fontSize: '11px', marginLeft: '4px'}}>{uncategorizedExpenses.length}</span>}</span>
+              <span>지출 {uncategorizedExpenses.length > 0 && tab !== 'expense' && (
+                <span style={{background: '#f04452', color: 'white', borderRadius: '10px', padding: '1px 6px', fontSize: '11px', marginLeft: '4px'}}>{uncategorizedExpenses.length}</span>
+              )}</span>
             )}
           </button>
         ))}
@@ -253,13 +274,9 @@ function Income() {
         <div style={{color: '#8b95a1', textAlign: 'center', padding: '40px 0'}}>불러오는 중...</div>
       ) : tab === 'expense' ? (
         <div>
-          {/* 미분류 섹션 */}
           {uncategorizedExpenses.length > 0 && (
             <div className="card" style={{marginBottom: '16px', border: '1px solid #ffd591'}}>
-              <div
-                style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer'}}
-                onClick={() => setShowUncategorized(!showUncategorized)}
-              >
+              <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer'}} onClick={() => setShowUncategorized(!showUncategorized)}>
                 <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
                   <span style={{fontSize: '16px'}}>⚠️</span>
                   <div>
@@ -276,38 +293,22 @@ function Income() {
                   <span style={{fontSize: '13px', color: '#8b95a1'}}>{showUncategorized ? '▲' : '▼'}</span>
                 </div>
               </div>
-
               {showUncategorized && (
                 <div style={{marginTop: '16px'}}>
                   {uncategorizedExpenses.map(t => {
                     const sugMain = expenseCategories.find(c => c.id === t.suggestedCategory)?.main_category || ''
                     return (
-                      <div key={t.id} style={{
-                        display: 'flex', alignItems: 'center', gap: '8px',
-                        padding: '8px 0', borderBottom: '1px solid #f2f4f6',
-                        flexWrap: 'wrap',
-                      }}>
+                      <div key={t.id} style={{display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 0', borderBottom: '1px solid #f2f4f6', flexWrap: 'wrap'}}>
                         <div style={{flex: 1, minWidth: '120px'}}>
                           <div style={{fontSize: '13px', fontWeight: '500', color: '#191f28'}}>{t.merchant}</div>
                           <div style={{fontSize: '11px', color: '#b0b8c1'}}>{t.date} · {t.amount.toLocaleString()}원</div>
                         </div>
-                        {t.autoMapped && (
-                          <span className="badge badge-success" style={{fontSize: '11px'}}>룰 적용</span>
-                        )}
-                        <select
-                          value={sugMain}
-                          onChange={e => { const f = expenseCategories.filter(c => c.main_category === e.target.value)[0]; handleUncatChange(t.id, f?.id || '') }}
-                          style={{fontSize: '12px', width: '90px'}}
-                        >
+                        {t.autoMapped && <span className="badge badge-success" style={{fontSize: '11px'}}>룰 적용</span>}
+                        <select value={sugMain} onChange={e => { const f = expenseCategories.filter(c => c.main_category === e.target.value)[0]; handleUncatChange(t.id, f?.id || '') }} style={{fontSize: '12px', width: '90px'}}>
                           <option value="">대분류</option>
                           {expenseMainCategories.map(m => <option key={m} value={m}>{m}</option>)}
                         </select>
-                        <select
-                          value={t.suggestedCategory}
-                          onChange={e => handleUncatChange(t.id, e.target.value)}
-                          disabled={!sugMain}
-                          style={{fontSize: '12px', width: '90px'}}
-                        >
+                        <select value={t.suggestedCategory} onChange={e => handleUncatChange(t.id, e.target.value)} disabled={!sugMain} style={{fontSize: '12px', width: '90px'}}>
                           <option value="">소분류</option>
                           {expenseCategories.filter(c => c.main_category === sugMain).map(c => <option key={c.id} value={c.id}>{c.sub_category}</option>)}
                         </select>
@@ -320,7 +321,6 @@ function Income() {
             </div>
           )}
 
-          {/* 요약 */}
           <div style={{display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '20px'}}>
             <div className="stat-card">
               <div className="label">직접 입력</div>
@@ -337,7 +337,6 @@ function Income() {
           </div>
 
           <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px'}}>
-            {/* 직접 입력 */}
             <div className="card">
               <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px'}}>
                 <h3>직접 입력</h3>
@@ -369,7 +368,6 @@ function Income() {
               }
             </div>
 
-            {/* 카드 내역 */}
             <div className="card">
               <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px'}}>
                 <h3>카드 내역</h3>
@@ -384,15 +382,36 @@ function Income() {
         </div>
       ) : (
         <div className="card">
+          {hasPrefilled && (
+            <div style={{background: '#ebf3fe', border: '1px solid #c3d9fd', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '13px', color: '#3182f6', fontWeight: '500'}}>
+              💡 이번 달 데이터가 없어서 전달 값을 불러왔어요. 수정 후 저장해주세요.
+            </div>
+          )}
           {mainCategories.map(main => (
             <div key={main} style={{marginBottom: '28px'}}>
               <div className="section-title">{main}</div>
               {entries.filter(e => e.main_category === main).map(e => (
                 <div key={e.category_id} style={{display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px'}}>
                   <span style={{width: '130px', fontSize: '14px', color: '#191f28'}}>{e.sub_category}</span>
-                  <input type="number" placeholder="0" value={e.amount} onChange={ev => handleChange(e.category_id, 'amount', ev.target.value)} style={{width: '150px', textAlign: 'right'}} />
+                  <input
+                    type="number"
+                    placeholder="0"
+                    value={e.amount}
+                    onChange={ev => handleChange(e.category_id, 'amount', ev.target.value)}
+                    style={{
+                      width: '150px', textAlign: 'right',
+                      border: e.isPrefilled ? '1.5px solid #c3d9fd' : undefined,
+                      background: e.isPrefilled ? '#f0f7ff' : undefined,
+                    }}
+                  />
                   <span style={{fontSize: '13px', color: '#8b95a1'}}>원</span>
-                  <input type="text" placeholder="메모 (선택)" value={e.memo} onChange={ev => handleChange(e.category_id, 'memo', ev.target.value)} style={{flex: 1}} />
+                  <input
+                    type="text"
+                    placeholder="메모 (선택)"
+                    value={e.memo}
+                    onChange={ev => handleChange(e.category_id, 'memo', ev.target.value)}
+                    style={{flex: 1}}
+                  />
                   {e.existing_id && (
                     <button onClick={() => { if (window.confirm(`${e.sub_category} 데이터를 삭제할까요?`)) handleDelete(e.category_id) }} style={{padding: '4px 10px', borderRadius: '6px', border: '1px solid #f04452', background: 'white', color: '#f04452', fontSize: '12px', cursor: 'pointer'}}>삭제</button>
                   )}
