@@ -76,6 +76,15 @@ function Dashboard() {
     const avgSavingRate = totalYearIncome > 0 ? ((totalYearIncome - totalYearExpense) / totalYearIncome * 100).toFixed(1) : 0
     setYearlyStats({ income: totalYearIncome, expense: totalYearExpense, saving: totalYearSaving, avgSavingRate })
 
+    // 저장된 AI 코멘트 불러오기
+    const { data: savedComment } = await supabase
+    .from('ai_comments')
+    .select('comment')
+    .eq('year', year)
+    .eq('month', selectedMonth)
+    .single()
+    if (savedComment) setAiComment(savedComment.comment)
+
     setLoading(false)
   }
 
@@ -117,6 +126,12 @@ ${trendStr}
     })
     const data = await response.json()
     setAiComment(data.content[0].text)
+    // 코멘트 Supabase에 저장
+    await supabase.from('ai_comments').upsert({
+    year,
+    month: selectedMonth,
+    comment: data.content[0].text,
+}, { onConflict: 'year,month' })
   } catch (err) {
     setAiComment('코멘트를 불러오는 데 실패했어요.')
   }
