@@ -47,7 +47,7 @@ function Assets() {
 
     const allData = data || []
     const months = [...new Set(allData.map(a => a.month))].sort((a, b) => b - a)
-    const latestMonth = months[0]
+    const latestMonth = months.filter(m => m <= defaultMonth)[0] || months[0]
     const prevMonth = months[1]
 
     setLatestAssets(allData.filter(a => a.month === latestMonth))
