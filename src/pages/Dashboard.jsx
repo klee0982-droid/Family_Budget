@@ -80,22 +80,20 @@ function Dashboard() {
   }
 
   async function generateComment() {
-    setAiLoading(true)
-    const savingRate = summary.income > 0 ? ((summary.income - summary.expense) / summary.income * 100).toFixed(1) : 0
-    const topStr = topExpenses.map(t => `${t.name} ${t.value.toLocaleString()}원`).join(', ')
-    const trendStr = trendData.map(t => `${t.month}: 수입 ${t.수입}만원, 지출 ${t.지출}만원, 저축률 ${t.savingRate}%`).join(' / ')
+  setAiLoading(true)
+  const savingRate = summary.income > 0 ? ((summary.income - summary.expense) / summary.income * 100).toFixed(1) : 0
+  const topStr = topExpenses.map(t => `${t.name} ${t.value.toLocaleString()}원`).join(', ')
+  const trendStr = trendData.map(t => `${t.month}: 수입 ${t.수입}만원, 지출 ${t.지출}만원, 저축률 ${t.savingRate}%`).join(' / ')
 
-    try {
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 300,
-          system: '당신은 가계부 AI 어시스턴트입니다. 주어진 재무 데이터를 바탕으로 따뜻하고 친근한 한국어로 3~4문장의 코멘트를 작성해주세요. 최근 월 현황과 연간 흐름을 모두 언급하고, 구체적인 수치를 포함해주세요. 이모지를 1~2개 사용해도 좋아요.',
-          messages: [{
-            role: 'user',
-            content: `${year}년 재무 현황 분석 요청:
+  try {
+    const response = await fetch('/api/comment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        system: '당신은 가계부 AI 어시스턴트입니다. 주어진 재무 데이터를 바탕으로 따뜻하고 친근한 한국어로 3~4문장의 코멘트를 작성해주세요. 최근 월 현황과 연간 흐름을 모두 언급하고, 구체적인 수치를 포함해주세요. 이모지를 1~2개 사용해도 좋아요.',
+        messages: [{
+          role: 'user',
+          content: `${year}년 재무 현황 분석 요청:
 
 [${selectedMonth}월 현황]
 - 수입: ${summary.income.toLocaleString()}원
@@ -114,16 +112,16 @@ ${trendStr}
 - 순자산: ${(netAsset / 100000000).toFixed(2)}억원
 
 최근 월 현황과 연간 흐름을 모두 언급해서 코멘트 작성해주세요.`
-          }]
-        })
+        }]
       })
-      const data = await response.json()
-      setAiComment(data.content[0].text)
-    } catch (err) {
-      setAiComment('코멘트를 불러오는 데 실패했어요.')
-    }
-    setAiLoading(false)
+    })
+    const data = await response.json()
+    setAiComment(data.content[0].text)
+  } catch (err) {
+    setAiComment('코멘트를 불러오는 데 실패했어요.')
   }
+  setAiLoading(false)
+}
 
   const savingRate = summary.income > 0 ? ((summary.income - summary.expense) / summary.income * 100).toFixed(1) : 0
 
