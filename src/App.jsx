@@ -27,16 +27,19 @@ function App() {
             boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
           }}>
             <div style={{display: 'flex', alignItems: 'center', gap: '6px', marginRight: '28px'}}>
-              <div style={{
-                width: '28px', height: '28px',
-                background: '#3182f6',
-                borderRadius: '8px',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                <span style={{color: 'white', fontSize: '14px', fontWeight: '700'}}>가</span>
-              </div>
-              <span style={{fontWeight: '700', fontSize: '16px', color: '#191f28', letterSpacing: '-0.3px'}}>가계부</span>
-            </div>
+            <div style={{
+              width: '32px', height: '32px',
+             background: 'linear-gradient(135deg, #3182f6 0%, #7c3aed 100%)',
+             borderRadius: '10px',
+             display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+    <span style={{color: 'white', fontSize: '13px', fontWeight: '800', letterSpacing: '-0.5px'}}>AN</span>
+  </div>
+  <div>
+    <div style={{fontWeight: '800', fontSize: '16px', color: '#191f28', letterSpacing: '-0.5px', lineHeight: 1}}>ANDO</div>
+    <div style={{fontSize: '9px', color: '#8b95a1', letterSpacing: '0.05em', lineHeight: 1, marginTop: '2px'}}>우리의 안심 가계부</div>
+  </div>
+</div>
 
             {[
               { to: '/', label: '대시보드' },
