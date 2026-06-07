@@ -49,7 +49,6 @@ function App() {
               { to: '/monthly', label: '월별 리포트' },
               { to: '/yearly', label: '연간 결산' },
               { to: '/assets', label: '자산 현황' },
-              { to: '/investments', label: '투자 현황' },
               { to: '/category-settings', label: '카테고리 관리' },
               { to: '/investments', label: '투자 관리' },
             ].map(({ to, label }) => (
@@ -82,6 +81,7 @@ function App() {
               <Route path="/yearly" element={<YearlySummary />} />
               <Route path="/assets" element={<Assets />} />
               <Route path="/category-settings" element={<CategorySettings />} />
+              <Route path="/investments" element={<Investments />} />
             </Routes>
           </main>
         </div>
