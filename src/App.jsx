@@ -7,6 +7,7 @@ import Income from './pages/Income'
 import YearlySummary from './pages/YearlySummary'
 import CategorySettings from './pages/CategorySettings'
 import PasswordGate from './PasswordGate'
+import Investments from './pages/Investments'
 
 function App() {
   return (
@@ -48,7 +49,9 @@ function App() {
               { to: '/monthly', label: '월별 리포트' },
               { to: '/yearly', label: '연간 결산' },
               { to: '/assets', label: '자산 현황' },
+              { to: '/investments', label: '투자 현황' },
               { to: '/category-settings', label: '카테고리 관리' },
+              { to: '/investments', label: '투자 관리' },
             ].map(({ to, label }) => (
               <NavLink
                 key={to}
