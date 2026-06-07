@@ -53,7 +53,8 @@ function Assets() {
     setLatestAssets(allData.filter(a => a.month === latestMonth))
     setPrevAssets(allData.filter(a => a.month === prevMonth))
 
-    const trend = months.reverse().map(m => {
+    const filteredMonths = months.filter(m => m <= defaultMonth)
+    const trend = filteredMonths.reverse().map(m => {
       const monthData = allData.filter(a => a.month === m)
       const fixed = monthData.filter(a => a.asset_type === 'fixed').reduce((s, a) => s + a.amount, 0)
       const liquid = monthData.filter(a => a.asset_type === 'liquid').reduce((s, a) => s + a.amount, 0)
